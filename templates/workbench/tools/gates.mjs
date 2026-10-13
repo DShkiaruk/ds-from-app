@@ -4,6 +4,7 @@
 //   parity  build, then the flow screens against the captures of the app
 //   task    fast + build + stories + Storybook + parity of the flow screens already built (--skip-unbuilt): before each
 //           task's commit (AGENTS.md rule 10); the flow is done only when `all` passes (rule 9)
+//   build   the build gate alone: vite build, then check-pages on dist (the pages open: console, links, overflow, performance)
 //   ci      fast + build + stories + Storybook, no parity: CI (Linux) draws other system fonts than the macOS the app was
 //           captured on, so parity's 4 px box check is a local gate, run on the machine the app was captured on
 import { spawnSync } from 'node:child_process';
@@ -23,7 +24,13 @@ const FAST = [
   ['lint (code)', npm('lint')], ['tokens only (styles)', stylesGate], ['tokens only (TypeScript)', npm('check:inline')],
   ['types', npm('typecheck')], ['token layer', npm('check:tokens')], ['stories exist', npm('check:stories')],
 ];
-const SLOW = [['build', npm('build')], ['stories render + accessibility', npm('test:stories')], ['Storybook builds', npm('build-storybook')]];
+// build, then the pages of the production build open and work (check-pages: console, links, overflow, performance)
+const buildGate = () => {
+  const b = run1(npm('build').cmd, npm('build').args);
+  if (!b.ok) return b;
+  return run1(npm('check:pages').cmd, npm('check:pages').args);
+};
+const SLOW = [['build, and the pages work', buildGate], ['stories render + accessibility', npm('test:stories')], ['Storybook builds', npm('build-storybook')]];
 
 function flowScreens() {
   const f = join(process.cwd(), 'extraction', 'decisions.json');
@@ -47,8 +54,8 @@ function parityGate(extra = []) {
   const only = extra.includes('--only') ? [] : screens.flatMap((s) => ['--only', s]);
   return run1(process.execPath, ['tools/parity.mjs', '.', '--serve', 'dist', '--merge', ...extra, ...only]);
 }
-if (!['fast', 'all', 'parity', 'ci', 'task'].includes(mode)) { console.error('usage: node tools/gates.mjs fast|all|parity|ci|task'); process.exit(2); }
-const plan = mode === 'ci' ? [...FAST, ...SLOW] : mode === 'task' ? [...FAST, ...SLOW, ['similarity to the app', () => parityGate(['--skip-unbuilt', ...extraArgs.flatMap((s) => ['--require', s])])]] : mode === 'parity' ? [['similarity to the app', () => parityGate(extraArgs)]] : mode === 'all' ? [...FAST, ...SLOW, ['similarity to the app', () => parityGate()]] : FAST;
+if (!['fast', 'all', 'parity', 'ci', 'task', 'build'].includes(mode)) { console.error('usage: node tools/gates.mjs fast|all|parity|ci|task|build'); process.exit(2); }
+const plan = mode === 'build' ? [['build, and the pages work', buildGate]] : mode === 'ci' ? [...FAST, ...SLOW] : mode === 'task' ? [...FAST, ...SLOW, ['similarity to the app', () => parityGate(['--skip-unbuilt', ...extraArgs.flatMap((s) => ['--require', s])])]] : mode === 'parity' ? [['similarity to the app', () => parityGate(extraArgs)]] : mode === 'all' ? [...FAST, ...SLOW, ['similarity to the app', () => parityGate()]] : FAST;
 let failed = 0;
 for (const [name, run] of plan) {
   const r = typeof run === 'function' ? run() : run1(run.cmd, run.args);

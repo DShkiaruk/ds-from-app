@@ -186,6 +186,28 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     assert.equal(r.status, 0, `npm run check must be green\n${r.out.slice(-4000)}`);
     assert.match(r.stdout, /gates: 10 passed, 0 failed/);
 
+    // 12b. the build gate also opens the pages (check-pages): one planted defect per check, red with its message, green again
+    const buildGate = () => sh('node', ['tools/gates.mjs', 'build'], repo);
+    r = await buildGate();
+    assert.equal(r.status, 0, `the build gate is green on the clean screen\n${r.out.slice(-3000)}`);
+    assert.match(r.stdout, /✓ build, and the pages work/);
+    const overview = join(sdir, 'Overview.tsx');
+    const plantPage = async (edit, pattern, why) => {
+      writeFileSync(overview, edit(SCREEN.tsx));
+      try {
+        const x = await buildGate();
+        assert.notEqual(x.status, 0, `${why}: the build gate must go red\n${x.out.slice(-2000)}`);
+        assert.match(x.out, /✗ build, and the pages work/);
+        assert.match(x.out, pattern, `${why}: the message`);
+      } finally { writeFileSync(overview, SCREEN.tsx); }
+      const g = await buildGate();
+      assert.equal(g.status, 0, `${why} (removed): the build gate is green again\n${g.out.slice(-2000)}`);
+    };
+    await plantPage((t) => t.replace('  return (', "  console.error('planted boom');\n  return ("), /console error: planted boom/, 'a console.error in a screen');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<h1>Fixture</h1><a href="#/nowhere">Gone</a>'), /link #\/nowhere: no screen "nowhere"/, 'a link to #/nowhere');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<h1>Fixture</h1><div style={{ width: 3000, height: 4 }} />'), /horizontal scroll at 1440 px/, 'a 3000 px wide element');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<p>Fixture</p>'), /no <h1>/, 'a screen without an h1');
+
     // 13. compare: one screen, a relative product image that exists next to compare.html
     r = await npm('compare');
     assert.equal(r.status, 0, `npm run compare\n${r.out.slice(-3000)}`);
