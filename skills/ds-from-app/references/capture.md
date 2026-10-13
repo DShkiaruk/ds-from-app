@@ -16,9 +16,12 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
   make data appear. `--socket-reads '<regex over the socket URL>'` lets a matching socket connect and counts the messages
   the page sends over it (`socket messages let through: N on ws://…`): same rule as `--reads` (only after the designer
   confirms it only reads), never for a product whose socket carries edits (collaborative editors, chat).
-- A hosting platform's bot check (Vercel, Cloudflare) is let through: it changes no product data; the console says
-  `hosting checks let through: N`. A page that stays a challenge means the platform refused the browser: tell the
-  designer, and do not re-run against the live product in a loop (repeated runs are what trigger the check).
+- A hosting platform's bot check (Vercel, Cloudflare) posts are let through (they change no product data; the console
+  says `hosting checks let through: N`). A site whose check refuses the browser itself — Vercel's Security Checkpoint,
+  "Failed to verify your browser" — stops capture.mjs and flows.mjs (exit 3): no driven browser passes it, visible or
+  not. Do not retry; tell the designer the ways on: the site's owner turns the protection off for the run or allows this
+  machine (an IP or a header rule), or the designer gives a copy of the app's files to serve locally. Never disguise the
+  browser.
 - `--allow-writes` (lifts the write block): only on a fixture or a sandbox the designer confirmed in words has nothing
   to break. Never on a real product.
 - `--interact` (real input: focus, hover, press — it can submit a form): only on a fixture or a sandbox, as above.

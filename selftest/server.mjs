@@ -34,6 +34,8 @@ export async function startServer() {
   let wsMessages = 0;
   const server = createServer((req, res) => {
     if (req.method === 'POST') { posts++; res.writeHead(204); res.end(); return; }
+    // a hosting platform's bot check, as Vercel answered the 2nd cold run (403, its own page instead of the app)
+    if (req.url.startsWith('/bot-check')) { res.writeHead(403, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Vercel Security Checkpoint</title><h1>Vercel Security Checkpoint</h1><p>Failed to verify your browser</p><p>Code 21</p>'); return; }
     if (req.url.startsWith('/go-elsewhere')) { res.writeHead(302, { location: '/' }); res.end(); return; }
     if (req.url.startsWith('/fonts/')) { res.writeHead(200, { 'content-type': 'text/css' }); res.end(FONT_CSS); return; }
     if (req.url.startsWith('/sprite.svg') || req.url.startsWith('/bell.svg')) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(req.url.startsWith('/sprite') ? SPRITE : BELL); return; }

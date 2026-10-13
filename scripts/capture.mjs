@@ -34,7 +34,7 @@
 import { launch } from './lib/browser.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
 
 // ── properties we read. Fixed on purpose: a capture whose property list drifts
@@ -727,6 +727,11 @@ const externalIcons = await page.evaluate(async ({ refs, imgs }) => {
   }
   return out;
 }, { refs: walk.svgExternal, imgs: walk.svgImages }).catch(() => []);
+if (await looksLikeBotCheck(page)) {
+  console.error(`refused: ${BOT_CHECK_ADVICE}`);
+  await browser.close();
+  process.exit(3);
+}
 if (!walk.elements.length) {
   console.error('nothing visible captured — wrong URL, a login wall, or a blocked render');
   await browser.close();

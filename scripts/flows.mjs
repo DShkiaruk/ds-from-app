@@ -44,7 +44,7 @@ import { launch } from './lib/browser.mjs';
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { restoreSession } from './lib/session.mjs';
 
 const args = process.argv.slice(2);
@@ -174,6 +174,7 @@ const SIGNIN = /\/(log-?in|sign-?in|auth)\b/i;
 const openScreen = async (s) => {
   await fresh();
   await page.goto(s.url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(s.url, { waitUntil: 'domcontentloaded' }).catch(() => {}));
+  if (await looksLikeBotCheck(page)) { console.error(`stopped at ${s.name ?? s.url}: ${BOT_CHECK_ADVICE}`); process.exit(3); }
   // a session that expired sends every screen to the sign-in page: stop, rather than record the screens as unreachable
   if (!SIGNIN.test(s.url) && SIGNIN.test(new URL(page.url()).pathname)) { console.error(`session expired: ${s.name ?? s.url} opened the sign-in page (${new URL(page.url()).pathname}) — refresh the session file and run again; flows.json was not written`); process.exit(3); }
   await page.waitForTimeout(SETTLE);

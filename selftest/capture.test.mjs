@@ -179,3 +179,13 @@ test('--viewport sets the size, the metadata and the file name', async () => {
   assert.match(f, /--390x844--/);
   assert.equal(JSON.parse(readFileSync(join(out, f), 'utf8')).meta.viewport.width, 390);
 });
+
+test('a hosting platform\'s bot check instead of the app: capture.mjs stops (exit 3) and says what the designer can do', async () => {
+  const out = join(dir, 'botcheck');
+  const r = await run('capture.mjs', '--url', `${S.url}bot-check`, '--screen', 'x', '--out', out, '--settle', '200');
+  assert.equal(r.status, 3, r.stdout + r.stderr);
+  assert.match(r.stderr, /refused: the site shows a bot check \(Vercel \/ Cloudflare\), not the app/);
+  assert.match(r.stderr, /Never disguise the browser/);
+  assert.ok(!existsSync(join(out, 'x--1440x900--light.json')), 'no capture of the check page is written');
+});
+

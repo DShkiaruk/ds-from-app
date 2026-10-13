@@ -29,6 +29,16 @@ export const REVEAL_ICON = /^(eye|eye-invisible|eye-off|eye-slash|eye-open)$/i;
 // the socket URL, --socket-reads) lets a socket that only reads connect through to the server; the messages the page sends
 // over it are counted in the array's `.socketMessages` (url -> n), and the summary reports them. Default-deny: a read the list misses shows up as a blocked request and
 // an empty widget, which is visible; a write the list misses would not be.
+// A hosting platform's bot check shown instead of the app (Vercel's Security Checkpoint, Cloudflare's "Just a moment…"). It
+// refuses any browser a program drives, visible or not (the 2nd cold run, 2026-10-14: "Failed to verify your browser, Code
+// 21", also in a visible window). The tools stop and say so; they never disguise the browser and never retry in a loop.
+export const BOT_CHECK = /Vercel Security Checkpoint|Failed to verify your browser|Checking your browser|Just a moment\.\.\.|Verify you are human|Attention Required! \| Cloudflare/i;
+export const BOT_CHECK_ADVICE = "the site shows a bot check (Vercel / Cloudflare), not the app. It refuses any browser a program drives, so the tools cannot pass it; do not retry (repeated runs are what trigger it). Tell the designer the ways on: the site's owner turns the protection off for the run, or allows this machine (an IP rule, or a header rule); or the designer gives a copy of the app's files, served locally. Never disguise the browser.";
+export async function looksLikeBotCheck(page) {
+  const t = await page.evaluate(() => `${document.title}\n${(document.body?.innerText || '').slice(0, 2000)}`).catch(() => '');
+  return BOT_CHECK.test(t);
+}
+
 // The paths a hosting platform's bot check posts to: they change no product data.
 export const PLATFORM_CHECK = /^\/(\.well-known\/vercel\/security\/|cdn-cgi\/challenge-platform\/)/;
 
