@@ -1,5 +1,27 @@
 # Changes
 
+## 0.1.3 — 2026-10-14
+
+The Workbench's Storybook, looked at page by page in the pilot and rebuilt to read like a design system:
+- **Foundations/Overview** first: what the Workbench is, the app and the capture date, how to read measured / derived /
+  decided, the structure; generated with the tokens.
+- **Colours grouped by what they paint** (text, backgrounds, borders, icons and fills, not used directly), from the
+  extraction's usage counts, as swatch tiles that still say how each value was obtained.
+- **Text styles**: the combinations of family, size, weight, line height and letter spacing the app really uses, read
+  from the captures, each with the app's own text as the specimen and the tokens that build it; then the scales.
+  No names are invented for them (a person names them).
+- No Controls on the Foundations pages, no repeated "purpose derived"; spacing, radius, shadows and borders drawn.
+- **A Docs page for every component** (autodocs from its JSDoc: what it is, where the app uses it, each prop);
+  screens and Foundations have none.
+- **States named**: `StateGrid` draws each state with its name; a state no capture reached is named "not reached
+  (NEEDS-STATE)", never drawn.
+- **Structure checked** (gate 5): a story's title starts where its file lives — `Components/`, `Screens/<screen>`, a
+  screen's own component under `Screens/<screen>/`. It caught 3 screen-local components filed under Components in
+  each pilot.
+
+Both pilot Workbenches were updated with `scaffold.mjs update`, their titles fixed and Button's states named:
+`npm run check` 10 of 10 on each.
+
 ## 0.1.2 — 2026-10-14
 
 The Workbench's harness, checked item by item against the Eleken harness (eleken-git.github.io/design-process-help/
