@@ -1,5 +1,18 @@
 # Changes
 
+## 0.2.0 — 2026-10-14
+
+Ready for other designers.
+- **The checkpoint asks about variables the app declares but nothing uses** — the gap the 2nd cold run showed (C5):
+  the prototype bar's `--proto`, `--proto-text`, `--proto-line` reached the Workbench. They now appear under
+  "Declared, not used", one group per name prefix, ticked = into the project; a prefix that names a prototype (proto,
+  demo, mock, …) starts unticked. Checked on the run's own data: with the page's defaults and a real Done, `--proto*`
+  stayed out, `npm run check` 10/10, and score.mjs met C1–C6 (the run's own pre-registered result stays as scored).
+- The checkpoint proposes an older extraction's dotted token names with `_` (as the token layer writes them), also
+  when it re-opens decisions saved before 0.1.4; token names may hold `_`.
+- README for designers: what is needed, installing and updating, the first run, the phrases of the Workbench loop,
+  safety and data, what does not work yet, how long the cold runs took, where to report.
+
 ## 0.1.6 — 2026-10-14
 
 From the end of the 2nd cold run:
@@ -9,7 +22,7 @@ From the end of the 2nd cold run:
   126 px menu buttons inside the 244 px menu) is still a difference; checked by planting it again. On the 2nd cold
   run's Workbench: 16 differences → 3.
 - The Workbench keeps `.env.example` in git (`!.env.example` after `.env*`): the handoff's `.env.example` was ignored.
-- **Known, not fixed yet:** variables the app declares but never uses (the prototype bar's `--proto`, `--proto-text`,
+- **Known, fixed in 0.2.0:** variables the app declares but never uses (the prototype bar's `--proto`, `--proto-text`,
   `--proto-line`) reach the Workbench unless the excluded part lists them; nothing paints them, so the checkpoint cannot
   tell they belong to the bar. The 2nd cold run did not list them (the 1st did). Next: the checkpoint asks the
   designer about declared-but-unused variables instead of passing them through.

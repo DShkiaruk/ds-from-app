@@ -56,3 +56,8 @@ primitives are flagged and start unticked at the checkpoint.
 4. Read `extraction/decisions.json`: `flow.screens` (in order) and `flow.name`; renamed tokens (`name` ≠ `id`);
    components with `include`; prototype-only parts put back (`include: true`); answers; the comment. Tell the
    designer in one or two lines what was decided. If `flow.screens` is empty, ask the designer which screens to start with (name them) before going on.
+
+- Variables the app declares but nothing uses get their own groups on the page ("Declared, not used", one per name
+  prefix): the screens cannot tell whether they are the product's or a prototype panel's. A prefix that names a
+  prototype (proto, demo, mock, …) starts unticked. Tell the designer to decide them; an unticked group stays out of
+  the Workbench.

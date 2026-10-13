@@ -270,7 +270,7 @@ test('proposed names are checked: the page blocks Done, the server answers 400',
     assert.equal(await done.isDisabled(), true, 'a name with a capital and a space blocks Done');
     assert.equal(await input.getAttribute('aria-invalid'), 'true');
     const msg = page.locator('[data-kind="tokens"][data-id="surface-1"] .err');
-    assert.match(await msg.innerText(), /Лише малі латинські літери, цифри й дефіс; назва має бути унікальною/);
+    assert.match(await msg.innerText(), /Лише малі латинські літери, цифри, дефіс і підкреслення; назва має бути унікальною/);
     assert.deepEqual(await page.evaluate(CONTRAST), [], 'the message meets AA contrast (light)');
     await page.emulateMedia({ colorScheme: 'dark' });
     assert.deepEqual(await page.evaluate(CONTRAST), [], 'the message meets AA contrast (dark)');

@@ -242,3 +242,28 @@ test('prepare adds the lit colours only an excluded part paints to its tokens; a
     assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).excluded[0].tokens, ['proto', 'lit-ff3300', 'lit-222222']);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
+
+test('prepare: variables the app declares but nothing uses become a group per name prefix to decide (the 2nd cold run\'s --proto*); a prototype-like prefix starts unticked; a re-prepare keeps the choice', async () => {
+  const unused = (role) => ({ $type: 'color', $value: '#1C1C1C', $provenance: { label: 'measured', authoredName: '--x', evidence: 'declared on ":root"' }, $extensions: { [EXT]: { role, roleProvenance: { label: 'derived', evidence: 'nothing uses it directly' } } } });
+  const { repo, spec } = makeExtraction({ ...DECLARED, proto: unused('color'), 'proto-text': unused('color'), 'i-bd': unused('color'), 'i-bg': unused('color') });
+  try {
+    let r = await cp('prepare', repo);
+    assert.equal(r.status, 0, r.stderr);
+    const f = join(spec, 'checkpoint.json');
+    let ex = Object.fromEntries(JSON.parse(readFileSync(f, 'utf8')).excluded.map((x) => [x.id, x]));
+    assert.deepEqual(ex['unused-proto']?.tokens, ['proto', 'proto-text']);
+    assert.equal(ex['unused-proto'].include, false, 'the name says prototype: unticked');
+    assert.equal(ex['unused-proto'].nameSaysPrototype, true);
+    assert.deepEqual(ex['unused-i']?.tokens, ['i-bd', 'i-bg']);
+    assert.equal(ex['unused-i'].include, true, 'any other prefix: ticked, it goes into the project');
+    // the designer's choice survives a re-prepare
+    const c = JSON.parse(readFileSync(f, 'utf8'));
+    c.excluded = c.excluded.map((x) => (x.id === 'unused-i' ? { ...x, include: false } : x));
+    writeFileSync(f, JSON.stringify(c));
+    r = await cp('prepare', repo);
+    const ids = JSON.parse(readFileSync(f, 'utf8')).excluded.map((x) => x.id);
+    ex = Object.fromEntries(JSON.parse(readFileSync(f, 'utf8')).excluded.map((x) => [x.id, x]));
+    assert.equal(ex['unused-i'].include, false);
+    assert.equal(new Set(ids).size, ids.length, `no group twice: ${ids}`);
+  } finally { rmSync(repo, { recursive: true, force: true }); }
+});

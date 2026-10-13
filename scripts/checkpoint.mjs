@@ -63,7 +63,8 @@ function prepare() {
     const x = t.$extensions?.[EXT] ?? {};
     const nodes = t.$provenance?.counters?.nodes;
     return {
-      id: key, name: key, value: shown(t), dark: t.$modes?.dark != null ? String(t.$modes.dark) : undefined,
+      id: key, name: key.replace(/\./g, '_'), // a dot is not a CSS name character: an older extraction's text-12.5px is proposed as text-12_5px (as the token layer writes it)
+      value: shown(t), dark: t.$modes?.dark != null ? String(t.$modes.dark) : undefined,
       group: x.role ?? 'other', label: t.$provenance?.label ?? 'unknown', roleLabel: x.roleProvenance?.label,
       nameStatus: nameStatus(t), evidence: String(t.$provenance?.evidence ?? '').slice(0, 300),
       uses: nodes != null ? { kind: 'elements', n: nodes } : x.usage?.rules ? { kind: 'rules', n: x.usage.rules } : undefined,
@@ -129,6 +130,20 @@ function prepare() {
       x.tokenNotes = { ...(x.tokenNotes ?? {}), [t.key]: 'painted only inside this part' };
     }
   }
+  // Variables the app declares but nothing uses (no element, no rule): nothing paints them, so no rule can tell whether
+  // they are the product's or a prototype bar's (the 2nd cold run's --proto, --proto-text, --proto-line reached the
+  // Workbench). The designer decides, one group per name prefix, as its own part: ticked = in the product. A prefix that
+  // names a prototype (proto, demo, mock, …) starts unticked and says why; the rest start ticked. A token another part
+  // already lists is left to that part.
+  const listed = new Set(excluded.flatMap((x) => x.tokens ?? []));
+  const unused = tokens.filter((t) => t.label === 'measured' && t.roleLabel === 'derived' && !t.uses && !listed.has(t.id));
+  const PROTO = /^(proto|prototype|demo|mock|sandbox|playground|storybook|sb|dev|debug)$/i;
+  const byPrefix = unused.reduce((g, t) => ((g[t.id.split('-')[0] || t.id] ??= []).push(t.id), g), {});
+  for (const [prefix, ids] of Object.entries(byPrefix)) {
+    const id = `unused-${prefix}`;
+    if (excluded.some((x) => x.id === id)) continue; // kept from the last prepare, with the designer's choice
+    excluded.push({ id, auto: 'unused', prefix, tokens: ids, include: !PROTO.test(prefix), nameSaysPrototype: PROTO.test(prefix) || undefined });
+  }
   const out = {
     project: P.name, source: doc.$meta?.platform?.source?.url ?? caps[0]?.meta.requestedUrl ?? '', preparedAt: new Date().toISOString(),
     screens: [...screens.values()], tokens, components, excluded, questions: prev.questions ?? [],
@@ -151,12 +166,14 @@ const STR = {
     usesElements: 'на {n} елементах', usesRules: 'у {n} правилах стилів',
     components: 'Компоненти', componentsIntro: 'Частини інтерфейсу, які отримають свою сторінку в Storybook. Без галочки — те, що схоже на службову частину бібліотеки; поставте, якщо потрібне.',
     instances: '{i} шт. на {s} екр.', states: 'стани', part: 'схоже на службову частину бібліотеки, а не на компонент продукту',
+    paintedOnlyHere: 'малює лише ця частина', unused: 'Оголошені, але не вжиті', unusedIntro: 'Ці змінні застосунок оголошує, але на знятих екранах ними ніщо не малює. Вирішіть для кожної групи: галочка — переносимо у проєкт, без галочки — ні (наприклад, якщо це змінні панелі прототипу).',
+    unusedWhat: 'Змінні {v}: застосунок їх оголошує, але жоден елемент ними не малює', unusedWhy: 'З екранів не видно, чи вони продукту, чи прототипу. Галочка — переносимо у проєкт; без галочки — ні.', unusedProto: 'Назва схожа на прототип ({p}), тому галочку знято наперед — поставте, якщо це продукт.',
     excludedTokens: 'кольори й значення лише цієї частини', excludedTexts: 'тексти', excluded: 'Лише для прототипу', excludedIntro: 'Схоже, ці частини існують лише для показу прототипу (перемикачі ролей, демо-кнопки). У проєкт вони не підуть. Поставте галочку, якщо це частина продукту.',
     comment: 'Ще щось?', commentPh: 'Необовʼязкова примітка для Claude', name: 'Назва', all: 'Обрати всі', none: 'Зняти всі',
     done: 'Готово', summary: 'Флоу: {f} екр. · компонентів: {c} · токенів: {t}',
     saved: 'Збережено', savedSub: 'Поверніться до Claude — він продовжить звідси. Вкладку можна закрити.',
     notSaved: 'Не збереглося', notSavedSub: 'Щось пішло не так. Скажіть про це Claude.',
-    badToken: 'Лише малі латинські літери, цифри й дефіс; назва має бути унікальною', badComponent: 'Латиницею, з великої літери, без пробілів; назва має бути унікальною',
+    badToken: 'Лише малі латинські літери, цифри, дефіс і підкреслення; назва має бути унікальною', badComponent: 'Латиницею, з великої літери, без пробілів; назва має бути унікальною',
   },
   en: {
     title: 'Decisions before the build', intro: 'Everything the tool found in the app. Choose the screens for the test flow, check the names marked "proposed name", and mark what exists only in the prototype. Nothing is built until you press Done.',
@@ -171,12 +188,14 @@ const STR = {
     usesElements: 'on {n} elements', usesRules: 'in {n} style rules',
     components: 'Components', componentsIntro: 'The parts of the interface that get their own Storybook page. Unticked: what looks like an internal part of a library; tick it if it is needed.',
     instances: '{i} on {s} screen(s)', states: 'states', part: 'looks like an internal part of a library, not a component of the product',
+    paintedOnlyHere: 'painted only inside this part', unused: 'Declared, not used', unusedIntro: 'The app declares these variables, but nothing on the captured screens paints with them. Decide per group: ticked, they go into the project; unticked, they do not (for example, a prototype panel\'s variables).',
+    unusedWhat: 'Variables {v}: the app declares them, but no element paints with them', unusedWhy: 'The screens cannot tell whether they are the product\'s or the prototype\'s. Ticked: they go into the project; unticked: they do not.', unusedProto: 'The name looks like a prototype\'s ({p}), so it starts unticked — tick it if it is the product\'s.',
     excludedTokens: 'values only this part uses', excludedTexts: 'texts', excluded: 'Prototype only', excludedIntro: 'These parts seem to exist only to demo the prototype (role switchers, demo buttons). They stay out of the project. Tick one if it is part of the product.',
     comment: 'Anything else?', commentPh: 'Optional note for Claude', name: 'Name', all: 'Select all', none: 'Clear',
     done: 'Done', summary: 'Flow: {f} screen(s) · components: {c} · tokens: {t}',
     saved: 'Saved', savedSub: 'Go back to Claude — it continues from here. You can close this tab.',
     notSaved: 'Not saved', notSavedSub: 'Something went wrong. Tell Claude.',
-    badToken: 'Lowercase Latin letters, digits and hyphens only; the name must be unique', badComponent: 'Latin letters, starting with a capital, no spaces; the name must be unique',
+    badToken: 'Lowercase Latin letters, digits, hyphens and underscores only; the name must be unique', badComponent: 'Latin letters, starting with a capital, no spaces; the name must be unique',
   },
 };
 const fmt = (t, v) => String(t).replace(/\{(\w+)\}/g, (_, k) => v[k] ?? '');
@@ -211,9 +230,12 @@ ${t.label === 'measured' && t.roleLabel === 'derived' ? `<div class="meta">${esc
 <div class="meta">${c.instances != null ? esc(fmt(s.instances, { i: c.instances, s: c.screens })) : ''}${c.states?.length ? ` · ${esc(s.states)}: ${esc(c.states.join(', '))}` : ''}</div>
 ${c.part ? `<div class="meta">${esc(s.part)}</div>` : ''}</div>
 <div class="side">${labelBadge(c.label)}${nameBadge(c.nameStatus)}</div></div>`;
+  const exText = (x) => (x.auto === 'unused'
+    ? { what: fmt(s.unusedWhat, { v: x.tokens.map((t) => `--${t}`).join(', ') }), why: `${s.unusedWhy}${x.nameSaysPrototype ? ` ${fmt(s.unusedProto, { p: x.prefix })}` : ''}` }
+    : { what: x.what, why: x.why });
   const exRow = (x) => `<div class="row" data-kind="excluded" data-id="${esc(x.id)}">
-<input type="checkbox" aria-label="${esc(x.what)}" ${x.include ? 'checked' : ''}>
-<div><div class="name">${esc(x.what)}</div><div class="meta">${esc(x.why)}</div>${x.tokens?.length ? `<div class="meta">${esc(s.excludedTokens)}: ${esc(x.tokens.map((t) => (x.tokenNotes?.[t] ? `${t} (${x.tokenNotes[t]})` : t)).join(', '))}</div>` : ''}${x.texts?.length ? `<div class="meta">${esc(s.excludedTexts)}: ${esc(x.texts.map((t) => `"${t}"`).join(', '))}</div>` : ''}</div><div></div></div>`;
+<input type="checkbox" aria-label="${esc(exText(x).what)}" ${x.include ? 'checked' : ''}>
+<div><div class="name">${esc(exText(x).what)}</div><div class="meta">${esc(exText(x).why)}</div>${x.tokens?.length && x.auto !== 'unused' ? `<div class="meta">${esc(s.excludedTokens)}: ${esc(x.tokens.map((t) => (x.tokenNotes?.[t] ? `${t} (${x.tokenNotes[t] === 'painted only inside this part' ? s.paintedOnlyHere : x.tokenNotes[t]})` : t)).join(', '))}</div>` : ''}${x.texts?.length ? `<div class="meta">${esc(s.excludedTexts)}: ${esc(x.texts.map((t) => `"${t}"`).join(', '))}</div>` : ''}</div><div></div></div>`;
   const qs = (inv.questions ?? []).map((q) => `<div class="q" data-id="${esc(q.id)}"><div class="name">${esc(q.text)}</div>${(q.options ?? []).map((o) => `<label><input type="radio" name="q:${esc(q.id)}" value="${esc(o)}" ${q.answer === o ? 'checked' : ''}> ${esc(o)}</label>`).join('')}</div>`).join('');
   const client = { badToken: s.badToken, badComponent: s.badComponent, summary: s.summary, saved: s.saved, savedSub: s.savedSub, notSaved: s.notSaved, notSavedSub: s.notSavedSub };
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -260,7 +282,8 @@ ${proposed.length ? `<div class="card">${proposed.map(tokenRow).join('')}</div>`
 <h2>${esc(s.components)}</h2><p class="intro">${esc(s.componentsIntro)}</p>
 <div class="tools"><button type="button" data-all="1">${esc(s.all)}</button><button type="button" data-all="0">${esc(s.none)}</button></div>
 <div class="card">${(inv.components ?? []).map(compRow).join('')}</div>
-${(inv.excluded ?? []).length ? `<h2>${esc(s.excluded)}</h2><p class="intro">${esc(s.excludedIntro)}</p><div class="card">${inv.excluded.map(exRow).join('')}</div>` : ''}
+${(inv.excluded ?? []).filter((x) => x.auto !== 'unused').length ? `<h2>${esc(s.excluded)}</h2><p class="intro">${esc(s.excludedIntro)}</p><div class="card">${inv.excluded.filter((x) => x.auto !== 'unused').map(exRow).join('')}</div>` : ''}
+${(inv.excluded ?? []).some((x) => x.auto === 'unused') ? `<h2>${esc(s.unused)}</h2><p class="intro">${esc(s.unusedIntro)}</p><div class="card">${inv.excluded.filter((x) => x.auto === 'unused').map(exRow).join('')}</div>` : ''}
 <h2>${esc(s.comment)}</h2><textarea id="comment" placeholder="${esc(s.commentPh)}">${esc(comment)}</textarea>
 </main>
 <div class="bar"><div><span class="sub" id="summary"></span><button id="done" type="button">${esc(s.done)}</button></div><div class="err" id="notsaved" role="alert" hidden></div></div>
@@ -269,7 +292,7 @@ const S = ${JSON.stringify(client).replace(/</g, '\\u003c')};
 const fmt = (t, v) => t.replace(/\\{(\\w+)\\}/g, (_, k) => v[k] ?? '');
 const $$ = (q) => [...document.querySelectorAll(q)];
 const ticked = (k) => $$('[data-kind="' + k + '"]').filter((r) => r.querySelector('input[type=checkbox]')?.checked);
-const RULES = { tokens: [/^[a-z][a-z0-9-]*$/, S.badToken], components: [/^[A-Z][A-Za-z0-9]*$/, S.badComponent] };
+const RULES = { tokens: [/^[a-z][a-z0-9_-]*$/, S.badToken], components: [/^[A-Z][A-Za-z0-9]*$/, S.badComponent] };
 const validate = () => {
   let bad = false;
   for (const [kind, [re, msg]] of Object.entries(RULES)) {
@@ -343,6 +366,8 @@ function serve() {
     for (const k of ['components', 'tokens', 'excluded', 'questions']) {
       const byId = Object.fromEntries((prev[k] ?? []).map((x) => [x.id, x]));
       for (const item of inv[k] ?? []) for (const f of ['include', 'name', 'answer']) if (byId[item.id]?.[f] !== undefined) item[f] = byId[item.id][f];
+      // a name saved before 0.1.4 may hold a dot (text-12.5px): it comes back as the token layer writes it (text-12_5px)
+      if (k === 'tokens') for (const item of inv.tokens ?? []) if (typeof item.name === 'string') item.name = item.name.replace(/\./g, '_');
     }
   }
   const html = page(inv, s, lang, [...new Set(prev?.flow?.screens ?? [])].filter((id) => (inv.screens ?? []).some((x) => x.id === id)), prev?.flow?.name || 'main-flow', prev?.comment ?? '');
@@ -371,7 +396,7 @@ function serve() {
           const names = rows.filter(counted).map((r) => r.name);
           return new Set(names).size !== names.length;
         };
-        if (bad('tokens', /^[a-z][a-z0-9-]*$/, () => true) || bad('components', /^[A-Z][A-Za-z0-9]*$/, (r) => r.include !== false)) return res.writeHead(400).end('bad request');
+        if (bad('tokens', /^[a-z][a-z0-9_-]*$/, () => true) || bad('components', /^[A-Z][A-Za-z0-9]*$/, (r) => r.include !== false)) return res.writeHead(400).end('bad request');
         const merge = (k) => (inv[k] ?? []).map((item) => { const x = (d[k] ?? []).find((y) => y.id === item.id) ?? {}; return { ...item, ...Object.fromEntries(['include', 'name'].filter((f) => x[f] !== undefined).map((f) => [f, x[f]])) }; });
         const known = new Set((inv.screens ?? []).map((x) => x.id));
         const out = {
