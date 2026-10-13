@@ -6,7 +6,7 @@ Seven gates (`npm run check` prints ten steps). Each rule names the gate that ch
 - One `<h1>` per screen; headings in order. — by hand
 - `<button>` for actions, `<a href>` for navigation, `<label>` for every field. — `npm run lint` (jsx-a11y)
 - Lists are `<ul>/<ol>`, tables are `<table>` with `<th scope>`. — by hand
-- Icons: the app's own SVGs from the captures (`svgs` in extraction/baseline/*.json) are the source; one Icon component holds them; a library icon only when it is the identical drawing. — by hand
+- Icons: the app's own SVGs from the captures (`svgs` in extraction/baseline/*.json) are the source; one Icon component holds them; a library icon only when it is the identical drawing. A drawing (an empty-state frame, an illustration, a divider: an SVG that is not an icon) comes from the captures' `drawings` and is reproduced as is (inline SVG in the component), never redrawn by eye. — by hand
 
 ## Accessibility (WCAG 2.2 AA)
 - Every story passes axe (contrast, names, roles). — `npm run test:stories`

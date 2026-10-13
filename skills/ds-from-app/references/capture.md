@@ -13,7 +13,9 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
   `--reads` does not apply to them. Both scripts end with `writes blocked: N — POST /graphql ×k, WEBSOCKET wss://… ×j`:
   read it. If widgets come back empty, the product reads through POST: name those reads with
   `--reads '<regex over the path>'`. Data read through a socket stays empty: tell the designer. Never lift the block to
-  make data appear.
+  make data appear. `--socket-reads '<regex over the socket URL>'` lets a matching socket connect and counts the messages
+  the page sends over it (`socket messages let through: N on ws://…`): same rule as `--reads` (only after the designer
+  confirms it only reads), never for a product whose socket carries edits (collaborative editors, chat).
 - `--allow-writes` (lifts the write block): only on a fixture or a sandbox the designer confirmed in words has nothing
   to break. Never on a real product.
 - `--interact` (real input: focus, hover, press — it can submit a form): only on a fixture or a sandbox, as above.
