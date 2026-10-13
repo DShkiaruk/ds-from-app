@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, appendFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, appendFileSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -339,4 +339,22 @@ test('check-vars: src/tokens and src/foundations are skipped', () => withRepo((d
     'src/foundations/Colors.tsx': "export const C = () => <i style={{ color: 'var(--nope)' }} />;\n",
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+}));
+
+test('check-component: storybook-static missing or older than src/ → says to build it and exits 2', () => withRepo((dir) => {
+  mkdirSync(join(dir, 'tools', 'lib'), { recursive: true });
+  for (const f of ['browser.mjs', 'color.mjs', 'flow-model.mjs']) copyFileSync(join(TOOLS, 'lib', f), join(dir, 'tools', 'lib', f));
+  copyFileSync(join(TOOLS, 'check-component.mjs'), join(dir, 'tools', 'check-component.mjs'));
+  const cc = (...a) => spawnSync(process.execPath, [join(dir, 'tools', 'check-component.mjs'), ...a], { cwd: dir, encoding: 'utf8' });
+  assert.equal(cc().status, 2, 'no name: usage');
+  let r = cc('Button');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /storybook-static is missing — run `npm run build-storybook` first/);
+  put(dir, 'storybook-static/index.json', '{"entries":{}}');
+  const old = new Date(Date.now() - 60000);
+  utimesSync(join(dir, 'storybook-static', 'index.json'), old, old);
+  put(dir, 'src/components/Button/Button.tsx', 'export const Button = () => null;\n');
+  r = cc('Button');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /older than src\/ — run `npm run build-storybook` first/);
 }));
