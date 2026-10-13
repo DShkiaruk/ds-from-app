@@ -102,7 +102,7 @@ function compare(s, c, root) {
   return { diffs, size };
 }
 
-let matched = 0, differ = 0, unknown = 0;
+let matched = 0, differ = 0, unknown = 0, states = 0;
 const browser = await launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -132,7 +132,17 @@ try {
       });
       if (!found) { unknown++; if (!notIn.includes(s.text)) notIn.push(s.text); continue; }
       const soft = best.size.filter((z) => z.container).map((z) => `${z.txt} (may be the story's container)`);
-      if (best.hard) {
+      // A story can show a state or a content no capture holds (the second tab selected, a demo page's heading). When the
+      // best match differs in STYLE and another element of the app with the same tag has exactly this element's styles,
+      // the difference is that state: said, not failed. A size difference alone is never explained this way.
+      let like = null;
+      if (best.diffs.length) {
+        for (const list of capEls) { like = list.find((c) => c.tag === s.tag && c.rect && !compare(s, c, root).diffs.length); if (like) break; }
+      }
+      if (like) {
+        states++;
+        console.log(`  ~ ${s.text}: looks like the app's "${like.text}" (${like.tag}) — a state or content no capture holds for this text (${best.diffs.join(', ')})`);
+      } else if (best.hard) {
         differ++;
         console.log(`  ✗ ${s.text}: ${[...best.size.filter((z) => !z.container).map((z) => z.txt), ...best.diffs, ...soft].join(', ')}`);
       } else { matched++; console.log(`  ✓ ${s.text}${soft.length ? ` — ${soft.join(', ')}` : ''}`); }
@@ -140,5 +150,5 @@ try {
     if (notIn.length) console.log(`  not in any capture: ${notIn.map((t) => `"${t}"`).join(', ')}`);
   }
 } finally { await browser.close(); server.close(); }
-console.log(`check:component: ${matched} matched, ${differ} differ, ${unknown} texts not in any capture`);
+console.log(`check:component: ${matched} matched, ${differ} differ, ${states} in a state no capture holds, ${unknown} texts not in any capture`);
 process.exit(differ ? 1 : 0);

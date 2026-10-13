@@ -27,7 +27,7 @@ description: Build one screen of the test flow (or one component) from specs/pag
    keep the captured name (`Screens/огляд`). Interface text exactly as the spec lists it.
    Build a navigation list inside `<nav>` as the app does.
    Transitions: a control that navigates goes to `#/<other screen>`; one that opens a menu or dialog opens it.
-   Before a component's commit run `npm run build-storybook && npm run check:component -- <Name>` (`--story <id>` for one story): it compares every story's boxes, fonts, colours, padding and radius with the app's element of the same text (✗ lines, story→app, e.g. `width 126→244`). Fix real differences; a size the story's container causes (flagged) goes into plan/progress.md. It is not a gate, and it runs before a whole screen exists.
+   Before a component's commit run `npm run build-storybook && npm run check:component -- <Name>` (`--story <id>` for one story): it compares every story's boxes, fonts, colours, padding and radius with the app's element of the same text (✗ lines, story→app, e.g. `width 126→244`). Fix real differences; a size the story's container causes (flagged) goes into plan/progress.md. It is not a gate, and it runs before a whole screen exists. A `~` line (a state no capture holds: the story looks like another element of the app) does not fail; write NEEDS-STATE when that state matters.
 5. Run `npm run check:fast`, then `npm run parity`. Read every ✗ line; fix and re-run. `npm run compare` and look at the
    pair yourself before claiming a match. What the lines mean:
    - `missing interface text`: the app shows that text outside its data rows and the prototype does not. Add it.

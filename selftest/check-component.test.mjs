@@ -38,7 +38,7 @@ test('check-component: a 126 px button against a 244 px capture is reported as w
     const r = run(dir, 'X');
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.match(r.stdout, /✗ Help Center: width 126→244/);
-    assert.match(r.stdout, /check:component: 0 matched, 1 differ, 1 texts not in any capture/);
+    assert.match(r.stdout, /check:component: 0 matched, 1 differ, 0 in a state no capture holds, 1 texts not in any capture/);
     assert.doesNotMatch(r.stdout, /container/, 'the story root is 1280 wide: not a container difference');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -49,7 +49,7 @@ test('check-component: the capture at 126 px passes; a text not in any capture i
     const r = run(dir, 'X');
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /✓ Help Center/);
-    assert.match(r.stdout, /check:component: 1 matched, 0 differ, 1 texts not in any capture/);
+    assert.match(r.stdout, /check:component: 1 matched, 0 differ, 0 in a state no capture holds, 1 texts not in any capture/);
     const s = run(dir, '--story', 'x--default');
     assert.equal(s.status, 0, s.stdout + s.stderr);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -69,3 +69,21 @@ test('check-component: a font or padding difference is named; a size beyond the 
     assert.match(c.stdout, /width 126→1400 \(may be the story's container\)/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('check-component: a story in a state no capture holds (it looks like another element of the app) is said, not failed; a size difference is still a failure', () => {
+  const dir = fixture(126);
+  try {
+    // the app shows "Help Center" selected (600) and "Docs" not (500); the story shows "Help Center" not selected
+    writeFileSync(join(dir, 'extraction', 'baseline', 'x.json'), capture(el('Help Center', 126, { fontWeight: '600' }), el('Docs', 60)));
+    const r = run(dir, 'X');
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /~ Help Center: looks like the app's "Docs" \(button\) — a state or content no capture holds for this text \(font-weight 500→600\)/);
+    assert.match(r.stdout, /0 differ, 1 in a state no capture holds/);
+    // the pilot's defect: only the width differs — never explained away by a look-alike
+    writeFileSync(join(dir, 'extraction', 'baseline', 'x.json'), capture(el('Help Center', 244), el('Docs', 60)));
+    const w = run(dir, 'X');
+    assert.equal(w.status, 1, w.stdout);
+    assert.match(w.stdout, /✗ Help Center: width 126→244/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
