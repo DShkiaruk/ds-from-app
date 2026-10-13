@@ -164,6 +164,12 @@ function update(dir) {
       else if (key === 'scripts' && pkg[key][k] !== v) { pkg[key][k] = v; changes.push(`scripts.${k}: updated`); }
     }
   }
+  // the Workbench's .gitignore gets the template's lines it lacks (as `workbench` does)
+  const giPath = join(dir, '.gitignore');
+  const giText = existsSync(giPath) ? readFileSync(giPath, 'utf8') : '';
+  const have = new Set(giText.split('\n').map((l) => l.trim()));
+  const giAdd = readFileSync(join(TPL, '.gitignore.workbench'), 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !have.has(l));
+  if (giAdd.length) { appendFileSync(giPath, `${giText === '' || giText.endsWith('\n') ? '' : '\n'}${giAdd.join('\n')}\n`); added.push(`.gitignore (+ ${giAdd.join(', ')})`); }
   const depsChanged = changes.some((c) => !c.startsWith('scripts.'));
   if (changes.length) writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
   writeFileSync(vf, `${VERSION}\n`);
