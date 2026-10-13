@@ -41,6 +41,8 @@ const put = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive
 const run = (dir, tool) => spawnSync(process.execPath, [join(dir, 'tools', tool)], { cwd: dir, encoding: 'utf8' });
 const withRepo = (fn) => { const dir = tmpRepo(); try { fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); } };
 
+// the title a story file at this path must have (check-stories)
+const titleFor = (rel) => { const p = rel.split('/'); return p[1] === 'components' ? `Components/${p.at(-1).split('.')[0]}` : p[1] === 'screens' ? `Screens/${p[2]}` : 'Foundations/X'; };
 const inline = (dir, file, code) => { put(dir, file, code); return run(dir, 'check-inline.mjs'); };
 const A = 'src/components/A/A.tsx';
 const lines = (r) => r.stdout.split('\n').filter((l) => /^src\//.test(l));
@@ -125,7 +127,7 @@ test('check-inline: without typescript installed it exits 2 with a hint', () => 
 }));
 
 test('check-stories: every component file and screen at any depth needs a story', () => withRepo((dir) => {
-  const st = (rel) => put(dir, rel, 'export default {};\n');
+  const st = (rel) => put(dir, rel, `export default { title: '${titleFor(rel)}' };\n`);
   const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
   c('src/components/forms/Input/Input.tsx');
   let r = run(dir, 'check-stories.mjs');
@@ -153,8 +155,40 @@ test('check-stories: every component file and screen at any depth needs a story'
   assert.equal(run(dir, 'check-stories.mjs').status, 0);
 }));
 
+test('check-stories: the story title starts where the file lives (Components/, Screens/<screen>, Foundations/)', () => withRepo((dir) => {
+  const st = (rel, title) => put(dir, rel, `export default { title: '${title}' };\n`);
+  const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
+  // a screen-local component titled Components/ is mixed with the shared ones: it fails with the file and the expected prefix
+  c('src/screens/home/Toolbar.tsx'); st('src/screens/home/Toolbar.stories.tsx', 'Components/Toolbar');
+  let r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/screens/home/Toolbar.stories.tsx: title 'Components/Toolbar' must start with 'Screens/home'"), r.stdout);
+  st('src/screens/home/Toolbar.stories.tsx', 'Screens/home/Toolbar');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 0, r.stdout);
+  // the screen itself, titled with the captured name (the folder is ASCII, the title may not be)
+  c('src/screens/overview/Overview.tsx'); st('src/screens/overview/Overview.stories.tsx', 'Screens/огляд');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/screens/overview/Overview.stories.tsx: title 'Screens/огляд' must start with 'Screens/overview'"), r.stdout);
+  st('src/screens/overview/Overview.stories.tsx', 'Screens/overview');
+  assert.equal(run(dir, 'check-stories.mjs').status, 0);
+  // a shared component under src/components must be Components/..., a Screens/ title there fails
+  c('src/components/Card/Card.tsx'); st('src/components/Card/Card.stories.tsx', 'Screens/Card');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/components/Card/Card.stories.tsx: title 'Screens/Card' must start with 'Components/'"), r.stdout);
+  st('src/components/Card/Card.stories.tsx', 'Components/Card');
+  assert.equal(run(dir, 'check-stories.mjs').status, 0);
+  // a story written with a typed meta object and double quotes is read too; foundations are generated and checked as well
+  put(dir, 'src/foundations/Foundations.stories.tsx', "const meta = { title: \"Tokens/Colour\" };\nexport default meta;\n");
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/foundations/Foundations.stories.tsx: title 'Tokens/Colour' must start with 'Foundations/'"), r.stdout);
+}));
+
 test('check-stories: folder and file names under src/components and src/screens are ASCII', () => withRepo((dir) => {
-  const st = (rel) => put(dir, rel, 'export default {};\n');
+  const st = (rel) => put(dir, rel, `export default { title: '${titleFor(rel)}' };\n`);
   const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
   c('src/screens/огляд/Overview.tsx'); st('src/screens/огляд/Overview.stories.tsx');
   let r = run(dir, 'check-stories.mjs');
