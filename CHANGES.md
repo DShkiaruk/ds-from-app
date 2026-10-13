@@ -12,6 +12,13 @@
   `flows.mjs` now recognise such a page, stop (exit 3) and say the ways on: the site's owner turns the protection off
   for the run or allows this machine, or the designer gives a copy of the app's files. They never disguise the browser
   and never retry in a loop.
+- **Token names are valid CSS names.** The plugin proposed `text-12.5px`; a dot is not a CSS name character, so the
+  browser drops `--text-12.5px` and every `var()` of it (the 2nd cold run's gate 2 caught a use). Proposed font sizes
+  are now `text-12_5px`; the checkpoint page refuses a dotted name until it is renamed; the token layer reports one.
+- **AGENTS.md rule 2:** before NEEDS-TOKEN, search src/tokens for the value itself — the 2nd cold run asked for a
+  16.8px line height that `--lit-leading-16_8` held.
+- **Parity and a panel fixed to the window's bottom:** with the top band left out, such a panel runs the full height in
+  the prototype; parity no longer expects its bottom 52 px higher (a false failure in the 2nd cold run).
 - **The checkpoint page's server exits by itself after Done**, and SKILL.md now says so: the second cold run had
   stopped it with `pkill -f`, against the rule never to kill a process by name.
 
