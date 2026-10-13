@@ -23,7 +23,8 @@
     "check:fast": "node tools/gates.mjs fast",
     "check": "node tools/gates.mjs all",
     "check:task": "node tools/gates.mjs task",
-    "check:ci": "node tools/gates.mjs ci"
+    "check:ci": "node tools/gates.mjs ci",
+    "check:component": "node tools/check-component.mjs"
   },
   "dependencies": { "react": "19.3.0", "react-dom": "19.3.0" },
   "devDependencies": {

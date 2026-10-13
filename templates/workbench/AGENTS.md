@@ -8,6 +8,7 @@ Layers, imports only downward: `src/screens` → `src/components` → `src/token
 ## Commands
 - `npm run dev` (prototype at :5173) · `npm run storybook` (:6006)
 - `npm run check:fast` — quick gates · `npm run check` — all seven gates (`npm run check` prints ten steps) · `npm run check:task` — before a task's commit: the same gates, parity only for the flow screens already built (the others are listed as not built yet) · `npm run parity` — the flow against the app (runs locally, on the machine the app was captured on; CI runs `npm run check:ci`, the same gates without parity)
+- `npm run build-storybook && npm run check:component -- <Name>` — one component against the capture before its commit (not a gate): each story's sizes, fonts, colours and padding against the app's element with the same text
 - `npm run tokens` — regenerate src/tokens from extraction/ · `npm run compare` — extraction/compare.html
 - The designer says «склади план» → PROMPT_plan.md · «зроби наступну задачу» → PROMPT_build.md · «чи готово?» → the frontend-qa skill
 

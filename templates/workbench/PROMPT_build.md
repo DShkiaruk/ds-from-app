@@ -6,6 +6,7 @@ While the previous task still waits for the designer's yes, start the next task 
 Use the build-page skill (.claude/skills/build-page). Implement only that task.
 Write the task's entry in plan/progress.md (date, task, the check you are about to run: `npm run check:task -- <the screens this task built>`); the line names the task, not a commit hash (git log has the hash).
 Then run `npm run check:task -- <the screens this task built>` for a screen task (parity must not skip them; the flow is done only when `npm run check` passes, parity for every flow screen). Fix what fails. A value you need is not a token → NEEDS-TOKEN in plan/progress.md, ask.
+Before the commit of every new or changed component, run `npm run build-storybook && npm run check:component -- <Name>`: it compares the component's stories with the app's capture, before a whole screen exists. Fix each real difference; one the story's own container causes (the line says "may be the story's container") goes into plan/progress.md.
 When every gate of check:task passes, mark the task done in the plan and add the last line of the check and the NEEDS-* found to the entry: plan/progress.md is updated BEFORE the commit.
 Then commit once, with a message naming the task: plan/progress.md is committed with it. One commit per task.
 Merge the branch into main only after the designer says yes (never push, deploy or publish without it).
