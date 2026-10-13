@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync, existsSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { startServer } from '../server.mjs';
@@ -293,6 +293,9 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     const afterK = stamp();
     assert.ok(afterK?.ok === true && afterK.fingerprint !== beforeK?.fingerprint, 'the gates ran on the clean non-ASCII change and passed');
     rmSync(kdir, { recursive: true, force: true });
+    // DSFA_KEEP_WORKBENCH=<dir>: keep this green Workbench (a synthetic app, no client data), without node_modules and
+    // build output, to run its CI on a real runner
+    if (process.env.DSFA_KEEP_WORKBENCH) cpSync(repo, process.env.DSFA_KEEP_WORKBENCH, { recursive: true, filter: (src) => !/[\\/](node_modules|dist|storybook-static)([\\/]|$)/.test(src.slice(repo.length)) });
   } finally {
     S.close();
     rmSync(home, { recursive: true, force: true });
