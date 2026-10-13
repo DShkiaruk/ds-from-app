@@ -212,18 +212,19 @@ for (const s of flows.screens.filter((x) => !ONLY.length || ONLY.includes(x.name
     const protoChrome = chromeOf(mine, isDetail);
     // a prototype-only bar at the top (excluded): the prototype is built without it, so the app's boxes sit `top` px higher
     const band = excludedBand(cap, leftOutParts);
-    const top = band?.top ?? 0;
-    if (band) r.leftOut.band = band.top;
+    const top = band?.top ?? 0, left = band?.left ?? 0;
+    if (band?.top) r.leftOut.band = band.top;
+    if (band?.left) r.leftOut.bandLeft = band.left;
     // R31: the layout also covers every other app element with its own text that the prototype shows too; a text the
     // prototype lacks is not a failure there (missing text is the copy check's job, for interface elements only)
     const asChrome = new Set(theirs);
     const protoLayout = layoutOf(mine, isDetail);
     const wider = layoutOf(cap.elements || [], isDetail).filter((e) => !asChrome.has(e) && !isData(e.text) && !leftOut(e.text));
     for (const e of [...theirs, ...wider]) {
-      const m = findInPrototype(e, asChrome.has(e) ? protoChrome : protoLayout, mine, top);
+      const m = findInPrototype(e, asChrome.has(e) ? protoChrome : protoLayout, mine, top, left);
       if (!m) { if (asChrome.has(e) && !r.missingCopy.includes(e.text)) r.missingCopy.push(e.text); continue; }
       const off = [];
-      for (const k of ['x', 'y', 'w', 'h']) { const was = k === 'y' ? e.rect.y - top : e.rect[k]; if (Math.abs(m.rect[k] - was) > TOL) off.push(`${k} ${was}→${m.rect[k]}`); }
+      for (const k of ['x', 'y', 'w', 'h']) { const was = k === 'y' ? e.rect.y - top : k === 'x' ? e.rect.x - left : e.rect[k]; if (Math.abs(m.rect[k] - was) > TOL) off.push(`${k} ${was}→${m.rect[k]}`); }
       // R31b: in the wider set a pair is compared only when the boxes agree; the same text held by a different element
       // (a span inside a field, a row of another list) is a different DOM, not a layout difference — skipped
       if (!asChrome.has(e) && off.length) continue;
@@ -314,7 +315,7 @@ for (const r of report) {
   if (r.layout.length > 8) console.log(`    … ${r.layout.length - 8} more off (flows/parity.json)`);
   if (r.density && !r.density.ok) console.log(`    density: ${r.density.product} data rows on the first screen in the product, ${r.density.prototype} in the prototype`);
   if (r.transitions.ok) console.log(`    ${r.transitions.ok} transition(s) reproduced`);
-  if (r.leftOut.elements || r.leftOut.controls) console.log(`    left out as prototype-only: ${r.leftOut.elements} element(s), ${r.leftOut.controls} control(s)${r.leftOut.band ? ` (a top band of ${r.leftOut.band} px: the app's positions are compared ${r.leftOut.band} px higher)` : ''}`);
+  if (r.leftOut.elements || r.leftOut.controls) console.log(`    left out as prototype-only: ${r.leftOut.elements} element(s), ${r.leftOut.controls} control(s)${r.leftOut.band ? ` (a top band of ${r.leftOut.band} px: the app's positions are compared ${r.leftOut.band} px higher)` : ''}${r.leftOut.bandLeft ? ` (a left band of ${r.leftOut.bandLeft} px: the app's positions are compared ${r.leftOut.bandLeft} px further left)` : ''}`);
 }
 const skipped = report.filter((r) => r.skipped).length;
 const bad = report.filter(fails).length + unknownOnly.length;

@@ -9,7 +9,7 @@ description: Build one screen of the test flow (or one component) from specs/pag
    screen's screenshot in extraction/baseline/ (named in the spec).
 2. Components first (folders and files ASCII, PascalCase: `Button/Button.tsx`): reuse src/components; a new one goes in src/screens/<screen>/ (or src/components/ when a second
    screen needs it) as <Name>.tsx + <Name>.module.css + <Name>.stories.tsx + index.ts.
-   - Icons: the app's own SVGs from the captures (`svgs` in extraction/baseline/*.json) are the source; one Icon component holds them; a library icon only when it is the identical drawing.
+   - Icons: the app's own SVGs from the captures (`svgs` in extraction/baseline/*.json) are the source; one Icon component holds them; a library icon only when it is the identical drawing. A drawing (an empty-state frame, an illustration, a divider: an SVG that is not an icon) comes from the captures' `drawings` and is reproduced as is (inline SVG in the component), never redrawn by eye.
    Stories: title `Components/<Name>`; `Default` (args for every prop), one story per variant the app shows, and `States` with
    `parameters: { pseudo: { hover: ['[data-pseudo="hover"]'], focusVisible: ['[data-pseudo="focus"]'], active: ['[data-pseudo="active"]'] } }`
    and the component rendered with `data-pseudo="hover|focus|active"` — only states its CSS styles.

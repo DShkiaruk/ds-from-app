@@ -25,21 +25,38 @@ export const REVEAL_ICON = /^(eye|eye-invisible|eye-off|eye-slash|eye-open)$/i;
 // data under it — measured on the first single-URL product: its analytics, order list and user list are all POST. Name
 // those reads with `reads` (a regex over the request's path, --reads '<regex>'): they go through, everything else that
 // is not GET/HEAD/OPTIONS is blocked and listed. `reads` does not apply to sockets: a connection is refused whatever its path. A product that
-// READS through a socket shows empty data; the console summary of capture.mjs / flows.mjs says so. Default-deny: a read the list misses shows up as a blocked request and
+// READS through a socket shows empty data; the console summary of capture.mjs / flows.mjs says so. `socketReads` (a regex over
+// the socket URL, --socket-reads) lets a socket that only reads connect through to the server; the messages the page sends
+// over it are counted in the array's `.socketMessages` (url -> n), and the summary reports them. Default-deny: a read the list misses shows up as a blocked request and
 // an empty widget, which is visible; a write the list misses would not be.
-export async function blockWrites(context, reads) {
+// The paths a hosting platform's bot check posts to: they change no product data.
+export const PLATFORM_CHECK = /^\/(\.well-known\/vercel\/security\/|cdn-cgi\/challenge-platform\/)/;
+
+export async function blockWrites(context, reads, socketReads) {
   const blocked = [];
+  const socketRe = socketReads ? new RegExp(socketReads) : null;
+  blocked.socketMessages = new Map();
   const readRe = reads ? new RegExp(reads) : null;
   await context.route('**/*', (route) => {
     const req = route.request();
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method())) return route.continue();
     if (readRe && readRe.test(new URL(req.url()).pathname)) return route.continue();
+    // the hosting platform's browser check (Vercel's challenge, Cloudflare's) posts to the platform, not the product:
+    // blocked, the page stays a blank challenge (found on the pilot's Vercel prototype after repeated runs)
+    if (PLATFORM_CHECK.test(new URL(req.url()).pathname)) { blocked.platformChecks = (blocked.platformChecks || 0) + 1; return route.continue(); }
     blocked.push({ method: req.method(), url: req.url().replace(/[?#].*$/, '') });
     return route.abort('blockedbyclient');
   });
   // Playwright 1.62: context.routeWebSocket(url, handler(ws)); with no ws.connectToServer() the page talks to a mock and
   // nothing reaches the server. ws.close() refuses it.
   await context.routeWebSocket(/.*/, (ws) => {
+    if (socketRe && socketRe.test(ws.url())) {
+      const key = ws.url().replace(/[?#].*$/, '');
+      blocked.socketMessages.set(key, blocked.socketMessages.get(key) || 0);
+      const server = ws.connectToServer();
+      ws.onMessage((m) => { blocked.socketMessages.set(key, blocked.socketMessages.get(key) + 1); server.send(m); }); // counted, then passed on
+      return;
+    }
     blocked.push({ method: 'WEBSOCKET', url: ws.url().replace(/[?#].*$/, '') });
     ws.close();
   });
@@ -55,5 +72,19 @@ export function blockedSummary(blocked) {
     counts.set(what, (counts.get(what) || 0) + 1);
   }
   const sockets = blocked.some((b) => b.method === 'WEBSOCKET');
-  return `writes blocked: ${blocked.length} — ${[...counts].map(([k, n]) => `${k} ×${n}`).join(', ')} (if these were reads, the page may show empty data: pass --reads '<regex of their paths>' after checking with the designer)${sockets ? '; a WebSocket is refused whatever --reads says: data the page reads through one stays empty — tell the designer' : ''}`;
+  return `writes blocked: ${blocked.length} — ${[...counts].map(([k, n]) => `${k} ×${n}`).join(', ')} (if these were reads, the page may show empty data: pass --reads '<regex of their paths>' after checking with the designer)${sockets ? "; a WebSocket is refused whatever --reads says: data the page reads through one stays empty — tell the designer. --socket-reads '<regex over the socket URL>' lets a reading socket through, only after the designer confirms it only reads" : ''}`;
+}
+
+// The line for sockets that --socket-reads let through: one per socket, with the messages the page sent over it. Takes the
+// arrays blockWrites returned (one per browser context); null when no socket was let through.
+export function socketSummary(...lists) {
+  const total = new Map();
+  for (const l of lists.filter(Boolean)) for (const [u, n] of l.socketMessages || []) total.set(u, (total.get(u) || 0) + n);
+  return total.size ? [...total].map(([u, n]) => `socket messages let through: ${n} on ${u}`).join('; ') : null;
+}
+
+// The line for the hosting platform's bot checks let through; null when there were none.
+export function platformSummary(...lists) {
+  const n = lists.filter(Boolean).reduce((k, l) => k + (l.platformChecks || 0), 0);
+  return n ? `hosting checks let through: ${n} (the platform's bot check, Vercel / Cloudflare: it changes no product data; a page that stays a challenge means the platform refused the browser — tell the designer)` : null;
 }

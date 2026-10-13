@@ -30,6 +30,26 @@ test('hidden state (spec 4.1): a background only a script-toggled class produces
   assert.match((cap.meta.stateMechanisms || []).join('\n'), /CSS\.forcePseudoState \(CDP\) — deterministic, fires no events, so JS\/attribute-driven state stays invisible/);
 });
 
+test('line styles: a dashed focus ring and a dotted border are recorded, not just their colour and width', () => {
+  const cap = JSON.parse(readFileSync(join(dir, 'baseline', 'fixture--1440x900--light.json'), 'utf8'));
+  const st = cap.states.find((x) => x.byForcedPseudo['focus-visible']?.properties?.outlineStyle?.to === 'dashed');
+  assert.ok(st, 'the focus-visible state sample records outlineStyle dashed');
+  const el = cap.elements.find((e) => e.text === 'Dotted box');
+  assert.ok(el, 'the dotted element is captured');
+  assert.equal(el.values.borderTopStyle, 'dotted', 'the element records borderTopStyle dotted');
+  assert.equal(el.values.borderLeftStyle, 'dotted');
+});
+
+test('drawings: a non-icon svg is recorded with its dash pattern; an icon-sized svg is not', () => {
+  const cap = JSON.parse(readFileSync(join(dir, 'baseline', 'fixture--1440x900--light.json'), 'utf8'));
+  const d = cap.drawings.find((x) => x.box.width === 160 && x.box.height === 58);
+  assert.ok(d, 'the 160x58 frame is in drawings');
+  assert.ok(d.shapes.some((sh) => sh['stroke-dasharray'] && sh['stroke-dasharray'] !== 'none'), 'its dashed rect keeps a stroke-dasharray');
+  assert.ok(d.shapes.some((sh) => sh.stroke === 'rgb(228, 228, 231)'), 'the stroke colour is the computed one');
+  assert.ok(!/on[a-z]+=|<script|foreignObject/i.test(d.markup), 'the markup is sanitized');
+  assert.ok(!cap.drawings.some((x) => x.box.width <= 48 && x.box.height <= 48), 'no icon-sized svg is a drawing');
+});
+
 test('the fonts the page loads: a cross-origin stylesheet is recorded by href, a declared face by absolute src', () => {
   const cap = JSON.parse(readFileSync(join(dir, 'baseline', 'fixture--1440x900--light.json'), 'utf8'));
   const href = (cap.fonts.crossOriginStylesheets ?? []).find((h) => /\/fonts\/fixture\.css$/.test(h));

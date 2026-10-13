@@ -56,6 +56,8 @@
   .muted { background-color: var(--color-muted); border: 1px solid var(--color-border); box-shadow: var(--shadow-md); }
   .off { background-color: #ff00aa; padding: 8px; } /* planted: a colour no token holds — on two elements */
   .odd { border-radius: 13px; } /* planted: a radius off the declared scale, on one element only (a one-off) */
+  .dashfocus:focus-visible { outline: 2px dashed rgb(200, 30, 30); outline-offset: 2px; } /* planted: a focus ring that is not solid */
+  .dotted { border: 3px dotted rgb(30, 30, 200); padding: 4px; } /* planted: a dotted border */
   .card.is-open { background: rgb(250, 240, 200); }
   </style>
 </head>
@@ -65,6 +67,9 @@
     <button class="btn"><svg class="lucide lucide-search" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Save</button>
     <svg aria-label="Company logo" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="4" fill="currentColor"></rect></svg>
     <svg class="chart" width="300" height="160" viewBox="0 0 300 160"><rect width="300" height="160" fill="currentColor"></rect></svg>
+    <div class="dashfocus" tabindex="0" style="width: 20px; height: 20px"></div><!-- focusable, no text: the shared fixture adds no interface text the heavy test would have to build -->
+    <div class="dotted">Dotted box</div>
+    <svg class="frame" width="160" height="58" viewBox="0 0 160 58" fill="none"><rect x="1" y="1" width="158" height="56" rx="6" stroke="#E4E4E7" stroke-width="1" stroke-dasharray="4 4"></rect><line x1="20" y1="20" x2="140" y2="20" stroke="#E4E4E7"></line><line x1="20" y1="36" x2="100" y2="36" stroke="#E4E4E7"></line></svg>
     <svg style="display:none"><symbol id="icon-star" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"></path></symbol></svg>
     <svg width="16" height="16" aria-label="Favourite"><use href="#icon-star"></use></svg>
     <svg width="16" height="16" aria-label="Settings"><use href="/sprite.svg#icon-gear"></use></svg>

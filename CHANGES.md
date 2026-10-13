@@ -1,5 +1,33 @@
 # Changes
 
+## 0.1.1 — 2026-10-14
+
+The known limits of 0.1.0 that sit in the plugin, fixed, each with a test, and checked on the pilot's data where it
+applies:
+- `flows.mjs` presses clickable rows that are not controls (a table row with a click handler), one per group of similar
+  rows, under the same name checks. On a local copy of the pilot's prototype it now reaches the policy page the 0.1.0
+  run never saw.
+- `flows.mjs` follows a press that opens a menu, a dialog or a drawer one level down: the controls inside are judged
+  like the page's, unsafe ones are listed and not pressed, safe ones are pressed once (at most 12 per layer).
+- `flows.mjs` lists the tab panels no capture holds, with the capture command for each, including tabs drawn without
+  ARIA roles (a `tabs` class). On the pilot's prototype: Rules, Exceptions, Repositories.
+- `capture.mjs` records outline and border line styles (a dashed focus ring), and the drawings a page holds (inline
+  SVGs larger than an icon: markup, box, stroke, dash pattern), so a dashed empty-state frame can be reproduced as is.
+- `--socket-reads '<regex>'` lets a socket that only reads connect, after the designer confirms; the console counts
+  the messages the page sent over it.
+- A hosting platform's bot check (Vercel, Cloudflare) goes through the write block. Found when the pilot's Vercel
+  prototype answered repeated runs with a challenge that the block refused, leaving every screen blank.
+- Parity and compare know a prototype-only column at the left as well as a bar at the top; compare.html crops the band
+  out of the app's picture.
+- The checkpoint adds to an excluded part every colour only that part paints, at rest or in a state. On the cold run's
+  data it adds the one colour that run missed (`lit-222222`, a bar button's hover).
+- `npm run check:component -- <Name>` compares a built Storybook story with the capture before a screen exists. On the
+  pilot's Workbench it reports 0 differences, and it reports the defect the pilot found by hand (bottom menu buttons
+  126 px wide instead of 244) when that defect is planted back. It is a tool the build loop runs, not a gate.
+
+Not changed: the two items of 0.1.0's list that live in the pilots' own Workbenches, not in the plugin (an a11y rule
+turned off for a whole story; the cold build's avatar initials line-height).
+
 ## 0.1.0 — 2026-10-13
 
 Extraction half (Plan 1): the platform instruments of ds-extract-method @ebaa66f moved in under new names

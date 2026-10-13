@@ -69,6 +69,23 @@ test('a single-URL product: screens by landmark, refusals, and the write block',
   } finally { rmSync(sp, { recursive: true, force: true }); }
 });
 
+test('--socket-reads lets a matching socket through, counts its messages and says so', async () => {
+  const sp = fixtureRepo('dsfa-spa-sock-');
+  try {
+    const origin = new URL(S.url).origin;
+    const signedIn = join(sp, 'session.auth.json');
+    writeFileSync(signedIn, JSON.stringify({ cookies: [], origins: [{ origin, localStorage: [], sessionStorage: [{ name: 'signedIn', value: '1' }] }] }));
+    await run('capture.mjs', '--url', `${S.url}spa/`, '--storage', signedIn, '--screen', 'orders', '--as-screen', '--out', join(sp, 'baseline'), '--no-interact', '--settle', '300');
+    await run('capture.mjs', '--url', `${S.url}spa/`, '--storage', signedIn, '--click', '[data-key="settings"]', '--as-screen', '--screen', 'settings', '--out', join(sp, 'baseline'), '--no-interact', '--settle', '300');
+    dropPngs(join(sp, 'baseline'));
+    S.resetPosts(); S.resetWs();
+    const m = await run('flows.mjs', sp, '--storage', signedIn, '--landmark', 'h1', '--allow', 'Order history', '--settle', '250', '--socket-reads', '/ws$');
+    assert.equal(m.status, 0, m.stderr);
+    assert.ok(S.wsMessages() > 0, 'the message reaches the server through the allowed socket');
+    assert.match(m.stdout, /socket messages let through: [1-9]\d* on ws:\/\/127\.0\.0\.1:\d+\/ws/);
+    assert.equal(S.posts(), 0, 'POST writes are still blocked');
+  } finally { rmSync(sp, { recursive: true, force: true }); }
+});
 test('by default flows.mjs blocks writes', async () => {
   const sp = fixtureRepo('dsfa-spa-def-');
   try {
@@ -88,7 +105,7 @@ test('by default flows.mjs blocks writes', async () => {
   } finally { rmSync(sp, { recursive: true, force: true }); }
 });
 
-test('clickable elements that are not controls are reported, never pressed', async () => {
+test('a clickable row that is not a control is pressed once per group', async () => {
   const rp = fixtureRepo('dsfa-rows-');
   try {
     await run('capture.mjs', '--url', `${S.url}rows/`, '--screen', 'rows', '--out', join(rp, 'baseline'), '--no-interact', '--settle', '300');
@@ -96,15 +113,63 @@ test('clickable elements that are not controls are reported, never pressed', asy
     assert.equal(m.status, 0, m.stderr || m.stdout);
     const F = JSON.parse(readFileSync(join(rp, 'flows', 'flows.json'), 'utf8'));
     const scr = F.screens[0];
+    const row = scr.transitions.find((t) => t.control.name === 'Row one');
     expectAll([
-      [scr.unpressed?.some((u) => u.text === 'Row one' && u.selector), 'the pointer-cursor row is listed in unpressed, with a selector'],
-      [scr.unpressedCount === 2, `unpressedCount counts both rows (${scr.unpressedCount})`],
-      [!scr.transitions.some((t) => t.control.name === 'Row one'), 'no transition is named "Row one": the row was not pressed'],
+      [row?.control.role === 'row' && row.control.selector && row.group === 2 && /2 similar, pressed the first/.test(row.note), `the first row is pressed, with its group (${JSON.stringify(row?.group)})`],
+      [row?.effect.kind === 'navigate', `its effect is recorded (${row?.effect.kind})`],
+      [!scr.transitions.some((t) => t.control.name === 'Row two'), 'the second row of the group is not pressed'],
+      [!scr.unpressed && scr.unpressedCount === 0, 'nothing is left unpressed'],
       [scr.transitions.some((t) => t.control.name === 'Refresh' && t.effect.kind === 'change'), 'the real button on the same page is still pressed'],
     ]);
-    assert.match(m.stdout, /clickable elements that are not controls were not pressed/);
-    assert.match(m.stdout, /2 clickable, not controls \(not pressed\)/);
+    assert.match(m.stdout, /1 clickable rows pressed/);
   } finally { rmSync(rp, { recursive: true, force: true }); }
+});
+
+test('rows, a layer and its controls: refused ones never reach the server; the detail view and the group', async () => {
+  const ap = fixtureRepo('dsfa-actions-');
+  try {
+    await run('capture.mjs', '--url', `${S.url}actions/`, '--screen', 'records', '--out', join(ap, 'baseline'), '--no-interact', '--settle', '300');
+    S.resetPosts();
+    const m = await run('flows.mjs', ap, '--settle', '250', '--allow-writes');
+    assert.equal(m.status, 0, m.stderr || m.stdout);
+    const F = JSON.parse(readFileSync(join(ap, 'flows', 'flows.json'), 'utf8'));
+    const scr = F.screens[0];
+    const t = (name) => scr.transitions.find((x) => x.control.name === name);
+    const more = t('More actions');
+    expectAll([
+      [S.posts() === 0, `no POST reached the server: the Delete row and the Delete menu item were refused, not pressed (${S.posts()})`],
+      [F.uncapturedLandmarks?.includes('Alpha detail'), `the detail view of a pressed row is a page no capture holds (${JSON.stringify(F.uncapturedLandmarks)})`],
+      [scr.refused.some((r) => r.role === 'row' && r.name === 'Delete record'), 'the Delete row is listed in refused'],
+      [!scr.transitions.some((x) => x.control.role === 'row' && x.control.name === 'Delete record'), 'the Delete row has no transition'],
+      [scr.transitions.filter((x) => x.control.role === 'row' && x.group === 50).length === 1, '50 rows in a group: one pressed'],
+      [more?.effect.kind === 'open' && more.inside?.refused.some((r) => r.name === 'Delete record' && r.why), 'the menu item "Delete record" is listed under inside.refused'],
+      [more?.inside?.pressed.find((p) => p.name === 'Rename')?.effect.kind === 'change', 'the menu item "Rename" was pressed and its effect recorded'],
+      [!more?.inside?.pressed.some((p) => p.name === 'Delete record'), 'the Delete menu item was not pressed'],
+      [F.uncapturedTabs?.some((x) => x.tab === 'History'), `tabs drawn without ARIA (a div.tabs) are tabs too: "History" is listed (${JSON.stringify(F.uncapturedTabs?.map((x) => x.tab))})`],
+    ]);
+  } finally { rmSync(ap, { recursive: true, force: true }); }
+});
+
+test('a tab whose panel no capture holds is listed, until a capture holds that click', async () => {
+  const tp = fixtureRepo('dsfa-tabs-');
+  try {
+    await run('capture.mjs', '--url', `${S.url}flows/detail/1`, '--screen', 'account-detail', '--out', join(tp, 'baseline'), '--no-interact', '--settle', '300');
+    const m = await run('flows.mjs', tp, '--settle', '250');
+    assert.equal(m.status, 0, m.stderr || m.stdout);
+    const F = JSON.parse(readFileSync(join(tp, 'flows', 'flows.json'), 'utf8'));
+    expectAll([
+      [F.uncapturedTabs?.length === 1 && F.uncapturedTabs[0].tab === 'Activity' && F.uncapturedTabs[0].screen === 'account-detail', `the second tab is listed, the open one is not (${JSON.stringify(F.uncapturedTabs?.map((x) => x.tab))})`],
+      [/--screen account-detail--activity/.test(F.uncapturedTabs?.[0]?.command) && /--click '/.test(F.uncapturedTabs?.[0]?.command), 'the suggested command names a screen and a click'],
+    ]);
+    assert.match(m.stdout, /tab panels no capture holds \(1\): account-detail \u203a Activity/);
+    // run the suggested command: the tab is then held
+    const cmd = F.uncapturedTabs[0].command.replace(/^capture\.mjs /, '');
+    const argv = [...cmd.matchAll(/'((?:[^']|'\\'')*)'|(\S+)/g)].map((x) => (x[1] !== undefined ? x[1].replace(/'\\''/g, "'") : x[2]));
+    await run('capture.mjs', ...argv, '--out', join(tp, 'baseline'), '--no-interact', '--settle', '300');
+    await run('flows.mjs', tp, '--settle', '250');
+    const G = JSON.parse(readFileSync(join(tp, 'flows', 'flows.json'), 'utf8'));
+    assert.equal(G.uncapturedTabs, undefined, `a tab panel a capture holds is no longer listed (${JSON.stringify(G.uncapturedTabs)})`);
+  } finally { rmSync(tp, { recursive: true, force: true }); }
 });
 
 test('a menu that swaps the page at one address is seen without --landmark (the default landmark is the main heading)', async () => {

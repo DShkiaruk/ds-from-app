@@ -124,7 +124,8 @@ export function flowSpecMd({ flowName, specPath, screens = [], flows = {}, exclu
       ...(data.length ? ['Sample data (invent your own — parity ignores data rows):', '', ...data.map((t) => `- ${t}`), ''] : []),
       'Controls and what they do:', '', ...(trs.length ? trs.map(controlLine) : ['- none recorded']), '',
       ...(leftOut.length ? ['Left out as prototype-only (do not build):', '', ...leftOut.map(([what, t]) => `- ${what}: ${t.map((x) => `"${x}"`).join(', ')}`), ''] : []),
-      ...(band && leftOut.length ? [`The prototype-only bar at the top is ${band.top} px tall: build the screen without it — it starts at the top of the page (parity accounts for the difference).`, ''] : []),
+      ...(band?.top && leftOut.length ? [`The prototype-only bar at the top is ${band.top} px tall: build the screen without it — it starts at the top of the page (parity accounts for the difference).`, ''] : []),
+      ...(band?.left && leftOut.length ? [`The prototype-only column at the left is ${band.left} px wide: build the screen without it — it starts at the left edge of the page (parity accounts for the difference).`, ''] : []),
       'Done when:', '', '- `npm run parity` passes for these screens', '- `npm run check` passes', '');
   }
   return lines.join('\n');
