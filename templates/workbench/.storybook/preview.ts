@@ -7,6 +7,8 @@ import meta from '../src/tokens/tokens.json';
 const dark = Boolean((meta as { themes?: { dark?: boolean } }).themes?.dark);
 
 const preview: Preview = {
+  // a Docs page for every component (what it is, its props, where the app uses it); main.ts takes it off Screens and Foundations
+  tags: ['autodocs'],
   ...(dark
     ? {
         globalTypes: { theme: { description: 'Theme', toolbar: { title: 'Theme', icon: 'mirror', dynamicTitle: true, items: [{ value: 'light', title: 'Light' }, { value: 'dark', title: 'Dark' }] } } },

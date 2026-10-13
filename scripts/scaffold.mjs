@@ -124,7 +124,7 @@ function workbench(dir) {
 }
 
 // What the plugin owns in a Workbench (overwritten by `update`); any other template file is only added when missing.
-const OWNED = [/^tools\//, /^\.claude\/skills\//, /^\.claude\/settings\.json$/, /^\.storybook\//, /^eslint\.config\.js$/, /^\.stylelintrc\.json$/, /^vite\.config\.ts$/, /^vitest\.config\.ts$/, /^tsconfig\.json$/, /^\.github\/workflows\/ci\.yml$/, /^PROMPT_(plan|build)\.md$/, /^src\/foundations\/TokenTable\./];
+const OWNED = [/^tools\//, /^\.claude\/skills\//, /^\.claude\/settings\.json$/, /^\.storybook\//, /^eslint\.config\.js$/, /^\.stylelintrc\.json$/, /^vite\.config\.ts$/, /^vitest\.config\.ts$/, /^tsconfig\.json$/, /^\.github\/workflows\/ci\.yml$/, /^PROMPT_(plan|build)\.md$/, /^src\/foundations\/(TokenTable|StateGrid)\./];
 const SIDE_BY_SIDE = ['AGENTS.md', 'FRONTEND.md']; // the designer's rules live here: the template's version goes next to them
 
 function update(dir) {
