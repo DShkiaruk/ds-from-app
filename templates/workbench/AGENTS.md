@@ -10,7 +10,7 @@ Layers, imports only downward: `src/screens` → `src/components` → `src/token
 - `npm run check:fast` — quick gates · `npm run check` — all seven gates (`npm run check` prints ten steps) · `npm run check:task` — before a task's commit: the same gates, parity only for the flow screens already built (the others are listed as not built yet) · `npm run parity` — the flow against the app (runs locally, on the machine the app was captured on; CI runs `npm run check:ci`, the same gates without parity)
 - `npm run build-storybook && npm run check:component -- <Name>` — one component against the capture before its commit (not a gate): each story's sizes, fonts, colours and padding against the app's element with the same text
 - `npm run tokens` — regenerate src/tokens from extraction/ · `npm run compare` — extraction/compare.html
-- The designer says «склади план» → PROMPT_plan.md · «зроби наступну задачу» → PROMPT_build.md · «чи готово?» → the frontend-qa skill
+- The designer says «склади план» → PROMPT_plan.md · «зроби наступну задачу» → PROMPT_build.md · «чи готово?» → the frontend-qa skill · «готуй передачу» → the client-handoff skill
 
 ## Rules
 1. Styles use tokens only: `var(--…)` from src/tokens. They are listed in the generated src/tokens/*.css (each line says how the value was obtained) and in Storybook → Foundations; DESIGN.md is the snapshot taken when the Workbench was made. Why: one literal and the design drifts from the app; gate 2 fails.
