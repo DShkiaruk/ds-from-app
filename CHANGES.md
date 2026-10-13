@@ -9,6 +9,10 @@ From the end of the 2nd cold run:
   126 px menu buttons inside the 244 px menu) is still a difference; checked by planting it again. On the 2nd cold
   run's Workbench: 16 differences → 3.
 - The Workbench keeps `.env.example` in git (`!.env.example` after `.env*`): the handoff's `.env.example` was ignored.
+- **Known, not fixed yet:** variables the app declares but never uses (the prototype bar's `--proto`, `--proto-text`,
+  `--proto-line`) reach the Workbench unless the excluded part lists them; nothing paints them, so the checkpoint cannot
+  tell they belong to the bar. The 2nd cold run did not list them (the 1st did). Next: the checkpoint asks the
+  designer about declared-but-unused variables instead of passing them through.
 
 ## 0.1.5 — 2026-10-14
 
