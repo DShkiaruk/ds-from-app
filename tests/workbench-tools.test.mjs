@@ -462,3 +462,29 @@ addEventListener('hashchange',go);go();</script></body></html>`;
   put(dir, 'dist/index.html', page(3000));
   assert.match(check().stdout, /✗ wide: horizontal scroll at 1440 px/);
 }));
+
+test('check-pages (browser): an outside resource that does not load is a warning (the network), a missing file of the build fails', () => withRepo((dir) => {
+  copyFileSync(join(TOOLS, 'check-pages.mjs'), join(dir, 'tools', 'check-pages.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'browser.mjs'), join(dir, 'tools', 'lib', 'browser.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'pages-model.mjs'), join(dir, 'tools', 'lib', 'pages-model.mjs'));
+  // GitHub Actions: the app's font stylesheet (another origin) was out of reach; nothing listens on port 9
+  const screensHtml = {
+    fonty: '<h1>Fonty</h1><link rel="stylesheet" href="http://127.0.0.1:9/fonts.css">',
+    broken: '<h1>Broken</h1><link rel="stylesheet" href="/assets/missing.css">',
+  };
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>T</title></head><body><div id="r"></div><script>
+const S=${JSON.stringify(screensHtml).replace(/</g, '\\u003c')};
+function go(){const id=decodeURIComponent(location.hash.replace(/^#\\/?/,''));const r=document.getElementById('r');
+ if(S[id]){r.innerHTML='<main>'+S[id]+'</main>';}
+ else r.innerHTML='<main data-workbench-index><h1>Screens</h1><ul>'+Object.keys(S).map(k=>'<li><a href="#/'+encodeURIComponent(k)+'">'+k+'</a></li>').join('')+'</ul></main>';}
+addEventListener('hashchange',go);go();</script></body></html>`;
+  put(dir, 'dist/index.html', html);
+  put(dir, 'extraction/baseline/x.json', JSON.stringify({ meta: { viewport: { width: 1440, height: 900 } } }));
+  const r = spawnSync(process.execPath, [join(dir, 'tools', 'check-pages.mjs'), 'dist'], { cwd: dir, encoding: 'utf8', timeout: 120000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /✓ fonty\n/);
+  assert.match(r.stdout, /an outside resource did not load \(the network or its server, not the Workbench\): http:\/\/127\.0\.0\.1:9\/fonts\.css/);
+  assert.match(r.stdout, /✗ broken: a file of the build is missing \(404\): http:\/\/127\.0\.0\.1:\d+\/assets\/missing\.css/);
+  assert.match(r.stdout, /check:pages: 2 screens, 1 problems/);
+}));
+

@@ -63,7 +63,14 @@ try {
     const bad = [], warn = [], notes = [], external = new Set();
     const page = await ctx.newPage();
     await page.setViewportSize({ width: 1440, height: HEIGHT });
-    page.on('console', (m) => { if (m.type() === 'error') bad.push(`console error: ${m.text().slice(0, 200)}`); else if (m.type() === 'warning') warn.push(m.text().slice(0, 200)); });
+    // A resource that did not load is judged by where it lives, not by its console line: a file of this build missing is
+    // the Workbench's fault; one from another origin (the app's web fonts on its own server, a CDN) is the network's —
+    // found on GitHub Actions, where the app's font server was out of reach: listed, not failed.
+    const own = (u) => { try { return new URL(u).origin === new URL(BASE).origin; } catch { return false; } };
+    page.on('console', (m) => { if (m.type() === 'error') { if (!/^Failed to load resource/.test(m.text())) bad.push(`console error: ${m.text().slice(0, 200)}`); } else if (m.type() === 'warning') warn.push(m.text().slice(0, 200)); });
+    const told = new Set(); // one line per resource: a 404 can also come back as a failed request
+    page.on('response', (res) => { if (res.status() >= 400 && !told.has(res.url())) { told.add(res.url()); (own(res.url()) ? bad.push(`a file of the build is missing (${res.status()}): ${res.url().slice(0, 160)}`) : warn.push(`an outside resource answered ${res.status()}: ${res.url().slice(0, 160)}`)); } });
+    page.on('requestfailed', (q) => { if (told.has(q.url())) return; told.add(q.url()); (own(q.url()) ? bad.push(`a file of the build did not load: ${q.url().slice(0, 160)}`) : warn.push(`an outside resource did not load (the network or its server, not the Workbench): ${q.url().slice(0, 160)}`)); });
     page.on('pageerror', (e) => bad.push(`page error: ${String(e.message).slice(0, 200)}`));
     await page.addInitScript(() => {
       window.__m = { cls: 0, lcp: null };
