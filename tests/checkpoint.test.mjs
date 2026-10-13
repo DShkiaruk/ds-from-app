@@ -211,3 +211,31 @@ test('prepare keeps the visible texts an excluded part names', async () => {
     assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).excluded[0].texts, ['Admin', 'User']);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });
+
+test('prepare adds the lit colours only an excluded part paints to its tokens; a colour also painted outside is not added', async () => {
+  const lit = (hex) => ({ $type: 'color', $value: hex, $provenance: { label: 'derived', evidence: 'painted on 2 elements' }, $extensions: { [EXT]: { role: 'color', painted: true, roleProvenance: { label: 'derived' } } } });
+  const { repo, spec } = makeExtraction({ ...DECLARED, 'lit-ff3300': lit('#FF3300'), 'lit-0033ff': lit('#0033FF') });
+  try {
+    const el = (tag, text, path, rect, values = {}) => ({ tag, text, path, rect, values });
+    const cap = { meta: { tool: 'capture.mjs', screen: 'огляд', colorScheme: 'light', requestedUrl: 'https://app.test/', finalUrl: 'https://app.test/', screenshot: '/x/огляд--1440x900--light.png', viewport: { width: 1440, height: 900 } }, elements: [
+      el('header', '', 'div#root>header', { x: 0, y: 0, w: 1440, h: 52 }, { backgroundColor: 'rgb(255, 51, 0)' }),
+      el('button', 'Admin', 'div#root>header>button:nth-of-type(1)', { x: 1200, y: 10, w: 50, h: 30 }, { color: 'rgb(255, 255, 255)', backgroundColor: 'rgb(255, 51, 0)', borderTopColor: 'rgb(0, 51, 255)', borderTopWidth: '0px', borderTopStyle: 'none' }),
+      el('button', 'User', 'div#root>header>button:nth-of-type(2)', { x: 1260, y: 10, w: 50, h: 30 }, { color: 'rgb(255, 255, 255)', outlineColor: 'rgb(0, 51, 255)', outlineWidth: '0px' }),
+      el('h1', 'Policies', 'div#root>main>h1', { x: 260, y: 80, w: 200, h: 30 }, { color: 'rgb(22, 22, 15)', backgroundColor: 'rgb(255, 255, 255)' }),
+      el('a', 'Docs', 'div#root>main>a', { x: 260, y: 200, w: 60, h: 20 }, { color: 'rgb(0, 51, 255)' }),
+    ] };
+    writeFileSync(join(spec, 'baseline', 'огляд--1440x900--light.json'), JSON.stringify(cap));
+    await cp('prepare', repo);
+    const f = join(spec, 'checkpoint.json');
+    const c = JSON.parse(readFileSync(f, 'utf8'));
+    c.excluded = [{ id: 'role-switch', what: 'Перемикач Admin / User', why: 'лише для показу', texts: ['Admin', 'User'], tokens: ['proto'] }];
+    writeFileSync(f, JSON.stringify(c));
+    const r = await cp('prepare', repo);
+    assert.equal(r.status, 0, r.stderr);
+    const ex = JSON.parse(readFileSync(f, 'utf8')).excluded[0];
+    assert.deepEqual(ex.tokens, ['proto', 'lit-ff3300'], 'the orange is painted only in the bar; the blue is also on the page link');
+    assert.deepEqual(ex.tokenNotes, { 'lit-ff3300': 'painted only inside this part' });
+    await cp('prepare', repo); // again: nothing doubles
+    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).excluded[0].tokens, ['proto', 'lit-ff3300']);
+  } finally { rmSync(repo, { recursive: true, force: true }); }
+});

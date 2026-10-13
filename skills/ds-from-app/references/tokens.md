@@ -42,7 +42,10 @@ primitives are flagged and start unticked at the checkpoint.
      CSS unless the designer puts the part back. `texts`: the visible words of the part exactly as the
      app shows them (button labels, tab names): the test flow's description and the similarity check then leave them
      out. When several prototype-only parts sit in one bar or panel, list the whole bar as one part — its texts and every
-     token only it paints, `lit-*` colours included. A component candidate that IS such a part (the bar's nav): say so in
+     token only it paints, `lit-*` colours included (`prepare` also adds, to a part that has `texts`, every `lit-*`/derived
+     colour whose uses in all captures sit inside that part, noted "painted only inside this part"; the designer can
+     still change it on the page). A bar at the top or a column at the left that is a part is cut out of the app's picture
+     in compare.html and its size is allowed for in parity. A component candidate that IS such a part (the bar's nav): say so in
      the part's `why`; the designer unticks it.
    - `questions`: `{ "id", "text", "options": [...] }` — only what the designer can answer (whose screens these are;
      whether a screen is in scope).
