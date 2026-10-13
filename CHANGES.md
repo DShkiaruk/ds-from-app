@@ -1,5 +1,31 @@
 # Changes
 
+## 0.1.2 — 2026-10-14
+
+The Workbench's harness, checked item by item against the Eleken harness (eleken-git.github.io/design-process-help/
+harness), and what was missing added:
+- **the pages work** (the harness's gates 6–9): the build step also opens every screen of the production build — no
+  console error, every internal link goes to a screen (a link to a flow screen not built yet, or to a page of the app
+  outside the flow, is a note), no horizontal scroll at the widths the app was captured at (other widths 320–1920 are
+  reported, not failed: the Workbench does not invent a responsive design the app never showed), CLS ≤ 0.1,
+  LCP ≤ 2.5 s, images ≤ 1 MB, a title, one h1, `lang`. `npm run check:pages`; the counts stay seven gates, ten steps;
+- **client-handoff**, the harness's third skill: HANDOFF.md in the client's language, README's run section,
+  .env.example; never pushes or publishes;
+- FRONTEND.md has the harness's nine areas (performance, browsers and SEO basics added; responsive now gated as above);
+  `test:a11y` and `test:e2e` name the story tests and the flow's parity in the harness's words; `public/`;
+- `scaffold.mjs update <repo>` brings a Workbench made with an older plugin up to the template: the plugin's files
+  are overwritten, the designer's (AGENTS.md, FRONTEND.md, specs, plan, src) never — a newer AGENTS.md / FRONTEND.md
+  is written next to them to merge by hand; one commit to review;
+- `check:component` (0.1.1 announced it, but the merge had lost it; restored): a story in a state no capture holds
+  (it looks like another element of the app: the second tab selected) is a `~` note, not a failure; a size
+  difference still fails.
+
+The two pilot Workbenches were updated with `scaffold.mjs update` and pass `npm run check` (10 of 10). Their own last
+items are fixed: the pilot's contrast exclusion now leaves out only the search box (the rule still checks the rest of
+the story, and fails when the exclusion is removed), and the cold build's user initials take the app's 14 px line
+height (the similarity check reports no difference). `check:component` on every component of both: 0 differ, and the
+pilot's planted width defect is reported.
+
 ## 0.1.1 — 2026-10-14
 
 The known limits of 0.1.0 that sit in the plugin, fixed, each with a test, and checked on the pilot's data where it
