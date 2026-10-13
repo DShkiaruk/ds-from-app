@@ -1,5 +1,15 @@
 # Changes
 
+## 0.1.6 — 2026-10-14
+
+From the end of the 2nd cold run:
+- `check:component`: a width the app's container sets is a note, not a difference — the app's element fills its
+  parent, and in the story it fills its own parent too or stands alone (a button the app stretches across a panel; a
+  page section in a narrower story). An inner element of a component that stops filling its container (the pilot's
+  126 px menu buttons inside the 244 px menu) is still a difference; checked by planting it again. On the 2nd cold
+  run's Workbench: 16 differences → 3.
+- The Workbench keeps `.env.example` in git (`!.env.example` after `.env*`): the handoff's `.env.example` was ignored.
+
 ## 0.1.5 — 2026-10-14
 
 - A Workbench made before 0.1.4 updates without a decision: its extraction still holds token names with a dot

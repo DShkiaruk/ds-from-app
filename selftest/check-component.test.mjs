@@ -87,3 +87,25 @@ test('check-component: a story in a state no capture holds (it looks like anothe
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+
+test('check-component: a width the app\'s container sets (the element fills its parent there; the story shows it alone) is a note; a component\'s inner element that stops filling is a difference', () => {
+  const dir = fixture(244);
+  try {
+    // the app: a 427 px panel whose button fills it (the 2nd cold run's "Run test")
+    const panel = { tag: 'div', text: '', path: 'html>body>aside', rect: { x: 0, y: 0, w: 427, h: 600 }, values: { paddingLeft: '0px', paddingRight: '0px' } };
+    const runTest = { ...el('Help Center', 427), path: 'html>body>aside>button' };
+    writeFileSync(join(dir, 'extraction', 'baseline', 'x.json'), capture(panel, runTest));
+    // the story: the button alone (its top element), 126 px
+    writeFileSync(join(dir, 'storybook-static', 'iframe.html'), IFRAME.replace('<span>Only here</span>', ''));
+    const alone = run(dir, 'X');
+    assert.equal(alone.status, 0, alone.stdout);
+    assert.match(alone.stdout, /width 126→427 \(in the app it fills its container; the story shows it alone\)/);
+    // the pilot's defect: the story holds the container (a 244 px menu) and the button inside stops filling it
+    writeFileSync(join(dir, 'storybook-static', 'iframe.html'), IFRAME.replace("'<button", "'<nav style=\"width:244px\"><button").replace('</button><span>Only here</span>', '</button><span>Only here</span></nav>'));
+    const menu = { tag: 'nav', text: '', path: 'html>body>nav', rect: { x: 0, y: 0, w: 244, h: 600 }, values: { paddingLeft: '0px', paddingRight: '0px' } };
+    writeFileSync(join(dir, 'extraction', 'baseline', 'x.json'), capture(menu, el('Help Center', 244)));
+    const inner = run(dir, 'X');
+    assert.equal(inner.status, 1, inner.stdout);
+    assert.match(inner.stdout, /✗ Help Center: width 126→244/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

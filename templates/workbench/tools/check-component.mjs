@@ -44,7 +44,18 @@ let flowScreens = [];
 try { flowScreens = JSON.parse(readFileSync(join(ROOT, 'extraction', 'flows', 'flows.json'), 'utf8')).screens ?? []; } catch { /* no flow yet */ }
 const inFlow = (c) => flowScreens.some((s) => (s.name && c.meta.screen === s.name) || (s.url && (c.meta.finalUrl || c.meta.requestedUrl) === s.url));
 caps.sort((a, b) => Number(inFlow(b)) - Number(inFlow(a)));
-const capEls = caps.map((c) => layoutElements(c.elements || []));
+// an element that fills its parent's content width in the app: its width is the container's choice, not the component's
+const pxv = (v) => parseFloat(v) || 0;
+const capEls = caps.map((c) => {
+  const byPath = new Map((c.elements || []).map((e) => [String(e.path ?? '').replace(/\s*>\s*/g, '>'), e]));
+  return layoutElements(c.elements || []).map((e) => {
+    const path = String(e.path ?? '').replace(/\s*>\s*/g, '>');
+    const p = byPath.get(path.slice(0, path.lastIndexOf('>')));
+    const v = p?.values ?? {};
+    const inner = p?.rect ? p.rect.w - pxv(v.paddingLeft) - pxv(v.paddingRight) - pxv(v.borderLeftWidth) - pxv(v.borderRightWidth) : null;
+    return { ...e, fill: inner != null && e.rect && Math.abs(e.rect.w - inner) < 2 };
+  });
+});
 if (!caps.length) die('check:component: no baseline capture in extraction/baseline — nothing to compare with.');
 
 // storybook-static, served here on a free port (no dependency).
@@ -70,7 +81,12 @@ const PAGE = (keys) => {
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) continue;
     const cs = getComputedStyle(el); const values = {}; for (const k of keys) values[k] = cs[k];
-    els.push({ tag: el.tagName.toLowerCase(), text: own, w: Math.round(r.width), h: Math.round(r.height), values });
+    // fill: the element takes its parent's content width; top: it is the story's own top element (only single-child
+    // wrappers between it and the root), so in the story it has no container of the component around it
+    const pe = el.parentElement, pr = pe.getBoundingClientRect(), pcs = getComputedStyle(pe), n = (v) => parseFloat(v) || 0;
+    const fill = Math.abs(r.width - (pr.width - n(pcs.paddingLeft) - n(pcs.paddingRight) - n(pcs.borderLeftWidth) - n(pcs.borderRightWidth))) < 2;
+    let a = el; while (a.parentElement && a.parentElement !== root && a.parentElement.children.length === 1) a = a.parentElement;
+    els.push({ tag: el.tagName.toLowerCase(), text: own, w: Math.round(r.width), h: Math.round(r.height), values, fill, top: a.parentElement === root });
   }
   return { root: { w: Math.round(rr.width), h: Math.round(rr.height) }, els };
 };
@@ -82,7 +98,12 @@ const name = (k) => NAMES[k] ?? k.replace(/([A-Z])/g, '-$1').toLowerCase();
 function compare(s, c, root) {
   const diffs = [], size = [];
   for (const [k, sv, cv, rootDim] of [['width', s.w, c.rect.w, root.w], ['height', s.h, c.rect.h, root.h]]) {
-    if (Math.abs(sv - cv) > 2) size.push({ txt: `${k} ${sv}→${cv}`, container: rootDim < cv });
+    if (Math.abs(sv - cv) <= 2) continue;
+    // a width the app's container sets: the app's element fills its parent, and in the story it fills its own parent too
+    // or stands alone (the story's top element). A component whose inner element stops filling (the pilot's 126 px menu
+    // buttons inside the 244 px menu) is still a difference.
+    const why = rootDim < cv ? "may be the story's container" : k === 'width' && c.fill && s.fill ? 'fills its container in both' : k === 'width' && c.fill && s.top ? 'in the app it fills its container; the story shows it alone' : null;
+    size.push({ txt: `${k} ${sv}→${cv}`, container: Boolean(why), why });
   }
   const sv = s.values, cv = c.values || {};
   for (const k of ['fontSize', 'fontWeight', 'lineHeight', 'letterSpacing']) if (cv[k] !== undefined && String(sv[k]) !== String(cv[k])) diffs.push(`${name(k)} ${sv[k]}→${cv[k]}`);
@@ -131,7 +152,7 @@ try {
         }
       });
       if (!found) { unknown++; if (!notIn.includes(s.text)) notIn.push(s.text); continue; }
-      const soft = best.size.filter((z) => z.container).map((z) => `${z.txt} (may be the story's container)`);
+      const soft = best.size.filter((z) => z.container).map((z) => `${z.txt} (${z.why})`);
       // A story can show a state or a content no capture holds (the second tab selected, a demo page's heading). When the
       // best match differs in STYLE and another element of the app with the same tag has exactly this element's styles,
       // the difference is that state: said, not failed. A size difference alone is never explained this way.

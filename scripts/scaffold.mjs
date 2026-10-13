@@ -25,7 +25,7 @@ const VERSION = JSON.parse(readFileSync(join(ROOT, '.claude-plugin', 'plugin.jso
 // off-system output fell from 18 of 29 runs to 3 of 30 (research/_exp/closure/ in ds-extract-method) — never to zero.
 const CLOSURE = 'This set is closed: no other token name exists, and no literal value may be written. When something needed is not here, write NEEDS-TOKEN / NEEDS-COMPONENT / NEEDS-STATE in plan/progress.md naming what was missing — never invent, never approximate, never fall back to a literal. A component the app does not have is built only from these tokens and only after the designer says yes.';
 const EMPTY_REPO = new Set(['.git', '.DS_Store', 'README.md', 'LICENSE', '.gitignore']);
-const GITIGNORE = ['node_modules/', '.DS_Store', '# sign-in sessions never enter the repository', '*.auth.json', '*.storage.json', 'auth.json', '.env*', '.session/', '# capture runs that are not the baseline', 'extraction/runs/', 'runs/', ''].join('\n');
+const GITIGNORE = ['node_modules/', '.DS_Store', '# sign-in sessions never enter the repository', '*.auth.json', '*.storage.json', 'auth.json', '.env*', '!.env.example', '.session/', '# capture runs that are not the baseline', 'extraction/runs/', 'runs/', ''].join('\n');
 const slugOf = (...names) => {
   for (const n of names) { const s = String(n ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); if (s) return s; }
   return 'product';
