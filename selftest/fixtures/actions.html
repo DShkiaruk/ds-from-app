@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- A synthetic product for the flows self-test: clickable rows that are not controls (a delegated handler), one of them
-     a "Delete" whose handler POSTs; a group of 50 rows; a "More actions" menu whose "Delete record" item POSTs. -->
+     a "Delete" whose handler POSTs; a group of 50 rows; a "More actions" menu whose "Delete record" item POSTs; tabs without ARIA roles. -->
 <html lang="en"><head><meta charset="utf-8"><title>Actions fixture</title>
 <style>body { font: 14px/20px system-ui, sans-serif; } main { padding: 24px; } .rec, .danger, .bulk { cursor: pointer; padding: 4px 0; } [role=menu] { border: 1px solid #ccc; padding: 8px; width: 200px; }</style></head>
 <body><main>
@@ -16,6 +16,9 @@
   <div class="danger" data-id="2">Delete record</div>
 </div>
 <div id="bulk"></div>
+<!-- tabs drawn without ARIA (the pilot's div.tabs): buttons whose parent has a "tabs" class -->
+<div class="tabs"><button type="button" class="tab on">Summary</button><button type="button" class="tab" id="hist">History</button></div>
+<p id="tabpanel">Summary panel</p>
 </main>
 <script>
   const bulk = document.getElementById('bulk');
@@ -28,5 +31,6 @@
   });
   document.getElementById('more').onclick = () => { document.getElementById('menu').hidden = false; document.getElementById('more').setAttribute('aria-expanded', 'true'); };
   document.getElementById('rename').onclick = () => { document.getElementById('status').textContent = 'Renamed'; document.getElementById('menu').hidden = true; };
+  document.getElementById('hist').onclick = () => { document.getElementById('tabpanel').textContent = 'History panel'; };
   document.getElementById('del').onclick = () => { fetch('/actions/api/delete', { method: 'POST' }); };
 </script></body></html>

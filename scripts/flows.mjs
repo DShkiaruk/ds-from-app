@@ -103,7 +103,9 @@ const CONTROLS = (inner) => {
     const role = el.getAttribute('role') || (el.tagName === 'A' ? 'link' : el.tagName === 'SUMMARY' ? 'button' : el.tagName.toLowerCase());
     out.push({
       role, name, selector: cssPath(el), href: el.getAttribute('href'), type: el.getAttribute('type'), icon: iconOf(el),
-      inTablist: Boolean(el.closest('[role="tablist"]')), inForm: Boolean(el.closest('form')), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
+      inTablist: Boolean(el.closest('[role="tablist"]')),
+      // tabs drawn without ARIA (buttons in a div.tabs): a "tab" / "tabs" class on the control or its parent
+      tabLike: /(^|[\s_-])tabs?($|[\s_-])/i.test(`${typeof el.className === 'string' ? el.className : ''} ${typeof el.parentElement?.className === 'string' ? el.parentElement.className : ''}`), inForm: Boolean(el.closest('form')), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
       inData: Boolean(el.closest('tbody, [role="row"], [role="rowgroup"] [role="row"], ul li, ol li, [role="listitem"]')),
       expanded: el.getAttribute('aria-expanded'), selected: el.getAttribute('aria-selected') ?? el.getAttribute('aria-current'),
     });
@@ -320,12 +322,12 @@ for (const s of screensIn) {
       if (safe.length > 12) t.inside.notPressed = safe.length - 12;
     }
     // A tab whose press changed the page in place leaves its panel uncaptured, unless a capture holds that click.
-    if ((c.role === 'tab' || c.inTablist) && effect.kind === 'change') {
+    if ((c.role === 'tab' || c.inTablist || c.tabLike) && effect.kind === 'change') {
       const held = caps.some((k) => k.meta.requestedUrl === url && k.meta.clicked?.at(-1)?.selector === c.selector && (k.meta.clicked?.length ?? 0) === s.clicks.length + 1);
       if (!held) {
         const scr = s.name ?? (new URL(url).pathname.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root');
         const q = (x) => `'${x.replace(/'/g, `'\\''`)}'`;
-        tabs.push({ screen: scr, tab: c.name, selector: c.selector, command: `capture.mjs --url ${url} ${[...s.clicks, c.selector].map((x) => `--click ${q(x)}`).join(' ')} --screen ${scr}--${c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tab'}` });
+        tabs.push({ screen: scr, tab: c.name, selector: c.selector, command: `capture.mjs --url ${url} ${[...s.clicks, c.selector].map((x) => `--click ${q(x)}`).join(' ')} --screen ${scr}--${c.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'tab'}` });
       }
     }
     transitions.push(t);

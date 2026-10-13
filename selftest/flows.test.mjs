@@ -128,6 +128,7 @@ test('rows, a layer and its controls: refused ones never reach the server; the d
       [more?.effect.kind === 'open' && more.inside?.refused.some((r) => r.name === 'Delete record' && r.why), 'the menu item "Delete record" is listed under inside.refused'],
       [more?.inside?.pressed.find((p) => p.name === 'Rename')?.effect.kind === 'change', 'the menu item "Rename" was pressed and its effect recorded'],
       [!more?.inside?.pressed.some((p) => p.name === 'Delete record'), 'the Delete menu item was not pressed'],
+      [F.uncapturedTabs?.some((x) => x.tab === 'History'), `tabs drawn without ARIA (a div.tabs) are tabs too: "History" is listed (${JSON.stringify(F.uncapturedTabs?.map((x) => x.tab))})`],
     ]);
   } finally { rmSync(ap, { recursive: true, force: true }); }
 });
