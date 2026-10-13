@@ -214,7 +214,7 @@ test('prepare keeps the visible texts an excluded part names', async () => {
 
 test('prepare adds the lit colours only an excluded part paints to its tokens; a colour also painted outside is not added', async () => {
   const lit = (hex) => ({ $type: 'color', $value: hex, $provenance: { label: 'derived', evidence: 'painted on 2 elements' }, $extensions: { [EXT]: { role: 'color', painted: true, roleProvenance: { label: 'derived' } } } });
-  const { repo, spec } = makeExtraction({ ...DECLARED, 'lit-ff3300': lit('#FF3300'), 'lit-0033ff': lit('#0033FF') });
+  const { repo, spec } = makeExtraction({ ...DECLARED, 'lit-ff3300': lit('#FF3300'), 'lit-0033ff': lit('#0033FF'), 'lit-222222': lit('#222222') });
   try {
     const el = (tag, text, path, rect, values = {}) => ({ tag, text, path, rect, values });
     const cap = { meta: { tool: 'capture.mjs', screen: 'огляд', colorScheme: 'light', requestedUrl: 'https://app.test/', finalUrl: 'https://app.test/', screenshot: '/x/огляд--1440x900--light.png', viewport: { width: 1440, height: 900 } }, elements: [
@@ -223,6 +223,9 @@ test('prepare adds the lit colours only an excluded part paints to its tokens; a
       el('button', 'User', 'div#root>header>button:nth-of-type(2)', { x: 1260, y: 10, w: 50, h: 30 }, { color: 'rgb(255, 255, 255)', outlineColor: 'rgb(0, 51, 255)', outlineWidth: '0px' }),
       el('h1', 'Policies', 'div#root>main>h1', { x: 260, y: 80, w: 200, h: 30 }, { color: 'rgb(22, 22, 15)', backgroundColor: 'rgb(255, 255, 255)' }),
       el('a', 'Docs', 'div#root>main>a', { x: 260, y: 200, w: 60, h: 20 }, { color: 'rgb(0, 51, 255)' }),
+    ], states: [
+      // the cold run's lit-222222: painted only by a bar button's :hover
+      { path: 'div#root>header>button:nth-of-type(1)', tag: 'button', byForcedPseudo: { hover: { properties: { backgroundColor: { from: 'rgb(255, 51, 0)', to: 'rgb(34, 34, 34)' } }, changed: 1 } }, byInteraction: {} },
     ] };
     writeFileSync(join(spec, 'baseline', 'огляд--1440x900--light.json'), JSON.stringify(cap));
     await cp('prepare', repo);
@@ -233,9 +236,9 @@ test('prepare adds the lit colours only an excluded part paints to its tokens; a
     const r = await cp('prepare', repo);
     assert.equal(r.status, 0, r.stderr);
     const ex = JSON.parse(readFileSync(f, 'utf8')).excluded[0];
-    assert.deepEqual(ex.tokens, ['proto', 'lit-ff3300'], 'the orange is painted only in the bar; the blue is also on the page link');
-    assert.deepEqual(ex.tokenNotes, { 'lit-ff3300': 'painted only inside this part' });
+    assert.deepEqual(ex.tokens, ['proto', 'lit-ff3300', 'lit-222222'], 'the orange is painted only in the bar, the dark grey only by a bar button\'s hover; the blue is also on the page link');
+    assert.deepEqual(ex.tokenNotes, { 'lit-ff3300': 'painted only inside this part', 'lit-222222': 'painted only inside this part' });
     await cp('prepare', repo); // again: nothing doubles
-    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).excluded[0].tokens, ['proto', 'lit-ff3300']);
+    assert.deepEqual(JSON.parse(readFileSync(f, 'utf8')).excluded[0].tokens, ['proto', 'lit-ff3300', 'lit-222222']);
   } finally { rmSync(repo, { recursive: true, force: true }); }
 });

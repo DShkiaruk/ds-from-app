@@ -102,13 +102,23 @@ function prepare() {
     const uses = new Map(colourTokens.map((t) => [t.key, { out: 0, in: new Map(withTexts.map((x) => [x, 0])) }]));
     for (const c of caps) {
       const mine = new Map(withTexts.map((x) => [x, new Set(excludedPartElements(c, x.texts, texts))]));
-      for (const e of c.elements ?? []) {
-        const painted = paintedBy(e);
-        if (!painted.length) continue;
+      const count = (e, painted) => {
         for (const t of colourTokens) {
           if (!painted.some((p) => t.values.some((tv) => same(tv, p)))) continue;
           const u = uses.get(t.key), owners = withTexts.filter((x) => mine.get(x).has(e));
           if (!owners.length) u.out++; else for (const x of owners) u.in.set(x, u.in.get(x) + 1);
+        }
+      };
+      for (const e of c.elements ?? []) { const painted = paintedBy(e); if (painted.length) count(e, painted); }
+      // a state paints too (a bar button's :hover background): its element is inside or outside the part like at rest
+      const byPath = new Map((c.elements ?? []).map((e) => [e.path, e]));
+      for (const st of c.states ?? []) {
+        const e = byPath.get(st.path);
+        if (!e) continue;
+        for (const sample of [...Object.values(st.byForcedPseudo ?? {}), ...Object.values(st.byInteraction ?? {})]) {
+          const to = Object.fromEntries(Object.entries(sample?.properties ?? {}).map(([k, v]) => [k, v?.to]));
+          const painted = paintedBy({ values: { ...e.values, ...to } });
+          if (painted.length) count(e, painted);
         }
       }
     }
