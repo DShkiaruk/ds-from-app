@@ -23,11 +23,11 @@ Seven gates (`npm run check` prints ten steps; the build step is "build, and the
 - Side by side for the designer. — `npm run compare`
 
 ## States
-- Every component shows the states the app has: default, hover, focus, pressed, disabled, plus empty / loading / error where the app has them; a state the app does not show is written as not-reached, never invented. — States stories, by hand
+- Every component shows the states the app has: default, hover, focus, pressed, disabled, plus empty / loading / error where the app has them; a state the app does not show is written as not-reached, never invented; the States story names each state (StateGrid). — States stories, by hand
 
 ## Maintainable code
 - Types pass. — `npm run typecheck`
-- Every component and screen has a story. — `npm run check:stories`
+- Every component and screen has a story, titled by where it lives: `Components/<Name>`, `Screens/<screen>`, `Screens/<screen>/<Name>` for a component one screen uses. — `npm run check:stories`
 - No component imports a screen; screens do not import each other. — by hand
 
 ## Clean build
