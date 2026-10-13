@@ -12,7 +12,7 @@ const ok = 'node -e "process.exit(0)"';
 
 function fakeRepo({ screens } = {}) {
   const repo = mkdtempSync(join(tmpdir(), 'dsfa-gates-'));
-  const scripts = { lint: ok, 'lint:css': `node -e "console.log('bad css');process.exit(1)"`, 'check:vars': ok, 'check:inline': ok, typecheck: ok, 'check:tokens': ok, 'check:stories': ok, build: ok };
+  const scripts = { lint: ok, 'lint:css': `node -e "console.log('bad css');process.exit(1)"`, 'check:vars': ok, 'check:inline': ok, typecheck: ok, 'check:tokens': ok, 'check:stories': ok, build: ok, 'check:pages': ok };
   writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'fake', private: true, scripts }));
   mkdirSync(join(repo, 'tools'));
   for (const f of ['gates.mjs', 'stop-check.mjs']) copyFileSync(join(TPL, 'tools', f), join(repo, 'tools', f));
@@ -175,7 +175,7 @@ test('gates parity passes --merge (so extraction/flows/parity.json is written fo
 test('gates ci = fast + slow, no parity (CI renders other fonts than the machine the app was captured on)', () => {
   const repo = fakeRepo({ screens: ['home'] });
   try {
-    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
+    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'check:pages', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
     writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'fake', private: true, scripts }));
     const r = run(repo, ['tools/gates.mjs', 'ci']);
     assert.equal(r.status, 0, r.stdout);
@@ -198,7 +198,7 @@ test('the Workbench wires check:ci to gates ci, CI runs it, and the docs say par
 test('gates task (R28.2) = fast + slow + parity of the flow screens already built (--skip-unbuilt, --merge, one --only per screen); all and parity do not skip', () => {
   const repo = fakeRepo({ screens: ['home', 'settings'] });
   try {
-    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
+    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'check:pages', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
     writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'fake', private: true, scripts }));
     writeFileSync(join(repo, 'tools', 'parity.mjs'), `import { writeFileSync } from 'node:fs'; writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));\n`);
     let r = run(repo, ['tools/gates.mjs', 'task']);
@@ -222,7 +222,7 @@ test('gates task (R28.2) = fast + slow + parity of the flow screens already buil
 test('gates task forwards its extra argv as --require <screen> (I1): the task\'s own screen is never skipped', () => {
   const repo = fakeRepo({ screens: ['home', 'settings'] });
   try {
-    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
+    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'check:pages', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
     writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'fake', private: true, scripts }));
     writeFileSync(join(repo, 'tools', 'parity.mjs'), `import { writeFileSync } from 'node:fs'; writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));\n`);
     let r = run(repo, ['tools/gates.mjs', 'task', 'settings']);
@@ -239,7 +239,7 @@ test('gates task forwards its extra argv as --require <screen> (I1): the task\'s
 test('gates parity forwards its extra argv (G1): `npm run parity -- --only <screen>` checks only that screen', () => {
   const repo = fakeRepo({ screens: ['home', 'settings'] });
   try {
-    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
+    const scripts = Object.fromEntries(['lint', 'lint:css', 'check:vars', 'check:inline', 'typecheck', 'check:tokens', 'check:stories', 'build', 'check:pages', 'test:stories', 'build-storybook'].map((k) => [k, ok]));
     writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'fake', private: true, scripts }));
     writeFileSync(join(repo, 'tools', 'parity.mjs'), `import { writeFileSync } from 'node:fs'; writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));\n`);
     run(repo, ['tools/gates.mjs', 'parity', '--only', 'settings']);

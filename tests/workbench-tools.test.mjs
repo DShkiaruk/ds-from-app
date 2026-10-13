@@ -340,3 +340,68 @@ test('check-vars: src/tokens and src/foundations are skipped', () => withRepo((d
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 }));
+
+// ---- check-pages: the pages of the production build work ----
+const PM = await import(join(TOOLS, 'lib', 'pages-model.mjs'));
+
+test('check-pages model: links resolve to screens, not to the index, a server path or a missing id', () => {
+  const B = 'http://127.0.0.1:5000/';
+  const c = (h, ids = []) => PM.classifyLink(h, B, ['home', 'a b'], {}, (id) => ids.includes(id));
+  assert.equal(c('#/home').kind, 'screen');
+  assert.equal(c('#/a%20b').kind, 'screen');
+  assert.match(c('#/nowhere').why, /no screen "nowhere"/);
+  assert.match(c('#/').why, /index/);
+  assert.match(c('#').why, /index/);
+  assert.match(c('/orders').why, /path of the server/);
+  assert.equal(c('https://example.com/x').kind, 'external');
+  assert.equal(c('mailto:a@b.c').kind, 'external');
+  assert.equal(c('#sec', ['sec']).kind, 'anchor');
+  assert.match(c('#sec').why, /no element/);
+  assert.equal(PM.classifyLink('#/orders-list', B, ['orders'], { orders: '#/orders-list' }).kind, 'screen');
+});
+
+test('check-pages model: budgets, basics and which widths fail', () => {
+  assert.deepEqual(PM.perfProblems({ cls: 0.1, lcpMs: 2500, imageBytes: 1_000_000 }), []);
+  assert.deepEqual(PM.perfProblems({ cls: 0.25, lcpMs: 3100, imageBytes: 1_500_000 }), ['CLS 0.250 > 0.1', 'LCP 3.10 s > 2.5 s', 'images 1.50 MB > 1 MB']);
+  assert.deepEqual(PM.seoProblems({ title: 'x', h1Count: 1, lang: 'en' }), []);
+  assert.equal(PM.seoProblems({ title: ' ', h1Count: 2, lang: '' }).length, 3);
+  const p = PM.widthPlan([1440, 1440, 1024]);
+  assert.deepEqual(p.cap, [1024, 1440]);
+  assert.deepEqual(p.other, [320, 375, 768, 1920]);
+  assert.deepEqual(PM.widthPlan([]).cap, [1440]);
+});
+
+test('check-pages (browser): clean screens pass; a console error, a bad link, a missing h1, a 3000 px element fail; other widths are only reported', () => withRepo((dir) => {
+  copyFileSync(join(TOOLS, 'check-pages.mjs'), join(dir, 'tools', 'check-pages.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'browser.mjs'), join(dir, 'tools', 'lib', 'browser.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'pages-model.mjs'), join(dir, 'tools', 'lib', 'pages-model.mjs'));
+  // a hand-made "build": the Workbench's hash routing without React
+  const screensHtml = {
+    good: '<h1>Good</h1><a href="#/wide">next</a> <a href="https://example.com">out</a>',
+    noisy: '<h1>Noisy</h1><script>console.error("boom")</script>',
+    linky: '<h1>Linky</h1><a href="#/nowhere">x</a>',
+    wide: '<h1>Wide</h1><div style="width:1000px">x</div>',
+    flat: '<p>no heading</p>',
+  };
+  const page = (w) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>T</title></head><body><div id="r"></div><script>
+const S=${JSON.stringify(screensHtml).replace("width:1000px", `width:${w}px`).replace(/</g, "\\u003c")};
+function go(){const id=decodeURIComponent(location.hash.replace(/^#\\/?/,''));const r=document.getElementById('r');
+ if(S[id]){r.innerHTML='<main>'+S[id]+'</main>';r.querySelectorAll('script').forEach(s=>{const n=document.createElement('script');n.textContent=s.textContent;document.body.appendChild(n);});}
+ else r.innerHTML='<main data-workbench-index><h1>Screens</h1><ul>'+Object.keys(S).map(k=>'<li><a href="#/'+encodeURIComponent(k)+'">'+k+'</a></li>').join('')+'</ul></main>';}
+addEventListener('hashchange',go);go();</script></body></html>`;
+  put(dir, 'dist/index.html', page(1000));
+  put(dir, 'extraction/baseline/x.json', JSON.stringify({ meta: { viewport: { width: 1440, height: 900 } } }));
+  const check = () => spawnSync(process.execPath, [join(dir, 'tools', 'check-pages.mjs'), 'dist'], { cwd: dir, encoding: 'utf8', timeout: 120000 });
+  const r = check();
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /✓ good\n/);
+  assert.match(r.stdout, /✗ noisy: console error: boom/);
+  assert.match(r.stdout, /✗ linky: link #\/nowhere: no screen "nowhere"/);
+  assert.match(r.stdout, /✗ flat: no <h1>/);
+  assert.match(r.stdout, /✓ wide\n/);   // 1000 px fits the captured 1440 ...
+  assert.match(r.stdout, /note: overflow at 320 px, not captured in the app: its behaviour at 320 px is unknown/);   // ... and is only reported at 320
+  assert.match(r.stdout, /external \(not fetched\): https:\/\/example\.com/);
+  assert.match(r.stdout, /check:pages: 5 screens, 3 problems/);
+  put(dir, 'dist/index.html', page(3000));
+  assert.match(check().stdout, /✗ wide: horizontal scroll at 1440 px/);
+}));
