@@ -220,11 +220,18 @@ for (const s of flows.screens.filter((x) => !ONLY.length || ONLY.includes(x.name
     const asChrome = new Set(theirs);
     const protoLayout = layoutOf(mine, isDetail);
     const wider = layoutOf(cap.elements || [], isDetail).filter((e) => !asChrome.has(e) && !isData(e.text) && !leftOut(e.text));
+    // A box fixed to the bottom of the window (a side panel, a drawer) does not move up with the band: in the app it ends at
+    // the window's bottom under the band, in the prototype at the same bottom with nothing above it (the 2nd cold run's
+    // Evaluator panel). Elements inside it may keep their distance to the bottom instead of the shifted top.
+    const vh = cap.meta?.viewport?.height;
+    const pathOf = (x) => String(x.path ?? '').replace(/\s*>\s*/g, '>');
+    const bottomFixed = top && typeof vh === 'number' ? (cap.elements || []).filter((a) => a.values?.position === 'fixed' && a.rect && Math.abs(a.rect.y + a.rect.h - vh) <= 2) : [];
+    const inBottomFixed = (e) => bottomFixed.some((a) => a === e || pathOf(e).startsWith(`${pathOf(a)}>`));
     for (const e of [...theirs, ...wider]) {
       const m = findInPrototype(e, asChrome.has(e) ? protoChrome : protoLayout, mine, top, left);
       if (!m) { if (asChrome.has(e) && !r.missingCopy.includes(e.text)) r.missingCopy.push(e.text); continue; }
       const off = [];
-      for (const k of ['x', 'y', 'w', 'h']) { const was = k === 'y' ? e.rect.y - top : k === 'x' ? e.rect.x - left : e.rect[k]; if (Math.abs(m.rect[k] - was) > TOL) off.push(`${k} ${was}→${m.rect[k]}`); }
+      for (const k of ['x', 'y', 'w', 'h']) { const was = k === 'y' ? e.rect.y - top : k === 'x' ? e.rect.x - left : e.rect[k]; if (Math.abs(m.rect[k] - was) > TOL && !(k === 'y' && inBottomFixed(e) && Math.abs(m.rect.y - e.rect.y) <= TOL)) off.push(`${k} ${was}→${m.rect[k]}`); }
       // R31b: in the wider set a pair is compared only when the boxes agree; the same text held by a different element
       // (a span inside a field, a row of another list) is a different DOM, not a layout difference — skipped
       if (!asChrome.has(e) && off.length) continue;

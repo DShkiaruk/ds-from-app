@@ -47,6 +47,9 @@ export async function startServer() {
     if (req.url.startsWith('/menu')) { res.end(MENU); return; }
     if (req.url.startsWith('/workbench-index')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body><main data-workbench-index><h1>Screens</h1><a href="#/x">x</a></main></body></html>'); return; }
     // R28.1: a prototype page without the product's prototype-only top bar — its content starts at the top of the page
+    // the band and a side panel fixed to the bottom of the window (the 2nd cold run's Evaluator): built without the band,
+    // the panel runs the full height and its bottom button stays where it was
+    if (req.url.startsWith('/band-panel')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Orders</title><style>body{margin:0}h1{position:absolute;left:24px;top:24px;width:300px;height:32px;margin:0;font:600 24px/32px sans-serif}aside{position:fixed;top:0;bottom:0;right:0;width:400px}aside button{position:absolute;left:24px;bottom:24px;width:120px;height:32px;margin:0;font:14px/20px sans-serif}</style></head><body><main><h1>Orders</h1></main><aside aria-label="Evaluator"><button type="button">Run test</button></aside></body></html>'); return; }
     if (req.url.startsWith('/band')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Orders</title><style>body{margin:0}h1{position:absolute;left:24px;top:24px;width:300px;height:32px;margin:0;font:600 24px/32px sans-serif}button{position:absolute;left:24px;top:80px;width:120px;height:32px;margin:0;font:14px/20px sans-serif}</style></head><body><main><h1>Orders</h1><button type="button">Add order</button></main></body></html>'); return; }
     if (req.url.startsWith('/spa')) { res.end(spaHtml); return; }
     if (req.url.startsWith('/literal')) { res.end(literalHtml); return; }

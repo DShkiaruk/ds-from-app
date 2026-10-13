@@ -109,3 +109,29 @@ test('parity (M1): an unknown --require name fails like an unknown --only; with 
     assert.match(none.stdout, /parity: 0 of 1 screens compared \(1 not built yet, skipped\)/);
   } finally { rmSync(fl, { recursive: true, force: true }); }
 });
+
+// The 2nd cold run: a side panel fixed to the bottom of the window does not move up with the band — its bottom button
+// keeps its distance to the window's bottom, while the page's heading moves up 52 px.
+test('parity: a panel fixed to the bottom of the window keeps its bottom when the top band is left out', async () => {
+  const fl = fixtureRepo('dsfa-parity-panel-');
+  try {
+    const url = 'http://product.test/orders';
+    handFlows(fl, [{ url, path: '/orders', pattern: '/orders', name: 'orders', transitions: [] }]);
+    writeFileSync(join(fl, 'flows', 'routes.json'), JSON.stringify({ orders: '/band-panel/' }));
+    const el = (tag, text, path, x, y, w, h, values) => ({ tag, text, path, rect: { x, y, w, h }, values });
+    writeFileSync(join(fl, 'baseline', 'orders--1440x900--light.json'), JSON.stringify({
+      meta: { tool: 'capture.mjs', requestedUrl: url, finalUrl: url, viewport: { width: 1440, height: 900 }, colorScheme: 'light' },
+      elements: [
+        el('header', '', 'div#root>header', 0, 0, 1440, 52),
+        el('button', 'Option 1', 'div#root>header>nav>button:nth-of-type(1)', 151, 12, 74, 28),
+        el('span', 'Admin', 'div#root>header>div:nth-of-type(2)>div>button>span', 1210, 18, 40, 16),
+        el('h1', 'Orders', 'div#root>main>h1', 24, 76, 300, 32),
+        el('aside', '', 'div#root>aside', 1040, 52, 400, 848, { position: 'fixed' }),
+        el('button', 'Run test', 'div#root>aside>button', 1064, 844, 120, 32)] }));
+    writeFileSync(join(fl, 'decisions.json'), JSON.stringify({ excluded: [{ id: 'bar', what: 'prototype bar', why: 'test', include: false, texts: ['Option 1', 'Admin'] }] }));
+    const r = await parity(fl, '--prototype', S.url);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.doesNotMatch(r.stdout, /off: button "Run test"/);
+  } finally { rmSync(fl, { recursive: true, force: true }); }
+});
+
