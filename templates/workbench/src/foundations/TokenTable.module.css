@@ -1,10 +1,30 @@
-.table { border-collapse: collapse; width: 100%; background: #fff; color: #16160f; font: 14px/1.4 system-ui, sans-serif; }
+.section { margin: 0 0 40px; color: #16160f; font: 14px/1.4 system-ui, sans-serif; }
+.h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+.count { font-size: 12px; font-weight: 600; color: #4a4943; margin-left: 6px; }
+.grid { list-style: none; margin: 16px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 20px 16px; }
+.tile { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; overflow-wrap: anywhere; }
+.tileName { font-size: 13px; font-weight: 600; }
+.swatchLarge { display: block; width: 100%; height: 72px; border-radius: 8px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
+.darkDot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.3); }
+.box { display: block; width: 72px; height: 72px; background: #e4e3de; border: 1px solid #8a8980; }
+.card { display: block; width: 100%; height: 72px; background: #fff; border-radius: 8px; }
+.list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 20px; }
+.style { padding-bottom: 20px; border-bottom: 1px solid #e4e3de; }
+.specimen { margin: 0 0 6px; color: #16160f; overflow-wrap: anywhere; }
+.recipe { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: 12px; }
+.recipeItem { display: flex; gap: 6px; align-items: baseline; }
+.recipeWhat { color: #4a4943; }
+.noToken { font-weight: 600; color: #8a2d0b; }
+.table { border-collapse: collapse; width: 100%; margin-top: 12px; background: #fff; color: #16160f; font: 14px/1.4 system-ui, sans-serif; }
 .table th, .table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e4e3de; vertical-align: middle; }
 .table th { font-weight: 600; font-size: 12px; color: #4a4943; }
-.swatch { display: inline-block; width: 40px; height: 40px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
-.box { display: inline-block; width: 48px; height: 48px; background: #f6f6f4; border: 1px solid #c9c8c2; }
+.sampleCell { min-width: 220px; }
+.lines { display: inline-flex; flex-direction: column; }
+.lines > span { background: #f6f6f4; }
+.lines > span + span { background: #e4e3de; }
 .bar { display: inline-block; height: 12px; background: #4a4943; }
-.note { font-size: 12px; color: #4a4943; margin-top: 2px; }
+.line { display: block; width: 160px; border-top: 1px solid #16160f; }
+.note { font-size: 12px; color: #4a4943; margin: 2px 0 0; }
 .badge, .measured, .derived, .decided { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
 .measured { background: #e3f3e9; color: #1a6b3c; }
 .derived { background: #e3ecf8; color: #1d4f91; }

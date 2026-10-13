@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, appendFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, appendFileSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,6 +41,8 @@ const put = (dir, rel, text) => { mkdirSync(dirname(join(dir, rel)), { recursive
 const run = (dir, tool) => spawnSync(process.execPath, [join(dir, 'tools', tool)], { cwd: dir, encoding: 'utf8' });
 const withRepo = (fn) => { const dir = tmpRepo(); try { fn(dir); } finally { rmSync(dir, { recursive: true, force: true }); } };
 
+// the title a story file at this path must have (check-stories)
+const titleFor = (rel) => { const p = rel.split('/'); return p[1] === 'components' ? `Components/${p.at(-1).split('.')[0]}` : p[1] === 'screens' ? `Screens/${p[2]}` : 'Foundations/X'; };
 const inline = (dir, file, code) => { put(dir, file, code); return run(dir, 'check-inline.mjs'); };
 const A = 'src/components/A/A.tsx';
 const lines = (r) => r.stdout.split('\n').filter((l) => /^src\//.test(l));
@@ -125,7 +127,7 @@ test('check-inline: without typescript installed it exits 2 with a hint', () => 
 }));
 
 test('check-stories: every component file and screen at any depth needs a story', () => withRepo((dir) => {
-  const st = (rel) => put(dir, rel, 'export default {};\n');
+  const st = (rel) => put(dir, rel, `export default { title: '${titleFor(rel)}' };\n`);
   const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
   c('src/components/forms/Input/Input.tsx');
   let r = run(dir, 'check-stories.mjs');
@@ -153,8 +155,40 @@ test('check-stories: every component file and screen at any depth needs a story'
   assert.equal(run(dir, 'check-stories.mjs').status, 0);
 }));
 
+test('check-stories: the story title starts where the file lives (Components/, Screens/<screen>, Foundations/)', () => withRepo((dir) => {
+  const st = (rel, title) => put(dir, rel, `export default { title: '${title}' };\n`);
+  const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
+  // a screen-local component titled Components/ is mixed with the shared ones: it fails with the file and the expected prefix
+  c('src/screens/home/Toolbar.tsx'); st('src/screens/home/Toolbar.stories.tsx', 'Components/Toolbar');
+  let r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/screens/home/Toolbar.stories.tsx: title 'Components/Toolbar' must start with 'Screens/home'"), r.stdout);
+  st('src/screens/home/Toolbar.stories.tsx', 'Screens/home/Toolbar');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 0, r.stdout);
+  // the screen itself, titled with the captured name (the folder is ASCII, the title may not be)
+  c('src/screens/overview/Overview.tsx'); st('src/screens/overview/Overview.stories.tsx', 'Screens/огляд');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/screens/overview/Overview.stories.tsx: title 'Screens/огляд' must start with 'Screens/overview'"), r.stdout);
+  st('src/screens/overview/Overview.stories.tsx', 'Screens/overview');
+  assert.equal(run(dir, 'check-stories.mjs').status, 0);
+  // a shared component under src/components must be Components/..., a Screens/ title there fails
+  c('src/components/Card/Card.tsx'); st('src/components/Card/Card.stories.tsx', 'Screens/Card');
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/components/Card/Card.stories.tsx: title 'Screens/Card' must start with 'Components/'"), r.stdout);
+  st('src/components/Card/Card.stories.tsx', 'Components/Card');
+  assert.equal(run(dir, 'check-stories.mjs').status, 0);
+  // a story written with a typed meta object and double quotes is read too; foundations are generated and checked as well
+  put(dir, 'src/foundations/Foundations.stories.tsx', "const meta = { title: \"Tokens/Colour\" };\nexport default meta;\n");
+  r = run(dir, 'check-stories.mjs');
+  assert.equal(r.status, 1, r.stdout);
+  assert.ok(r.stdout.includes("src/foundations/Foundations.stories.tsx: title 'Tokens/Colour' must start with 'Foundations/'"), r.stdout);
+}));
+
 test('check-stories: folder and file names under src/components and src/screens are ASCII', () => withRepo((dir) => {
-  const st = (rel) => put(dir, rel, 'export default {};\n');
+  const st = (rel) => put(dir, rel, `export default { title: '${titleFor(rel)}' };\n`);
   const c = (rel) => put(dir, rel, 'export const X = () => null;\n');
   c('src/screens/огляд/Overview.tsx'); st('src/screens/огляд/Overview.stories.tsx');
   let r = run(dir, 'check-stories.mjs');
@@ -339,4 +373,92 @@ test('check-vars: src/tokens and src/foundations are skipped', () => withRepo((d
     'src/foundations/Colors.tsx': "export const C = () => <i style={{ color: 'var(--nope)' }} />;\n",
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+}));
+
+test('check-component: storybook-static missing or older than src/ → says to build it and exits 2', () => withRepo((dir) => {
+  mkdirSync(join(dir, 'tools', 'lib'), { recursive: true });
+  for (const f of ['browser.mjs', 'color.mjs', 'flow-model.mjs']) copyFileSync(join(TOOLS, 'lib', f), join(dir, 'tools', 'lib', f));
+  copyFileSync(join(TOOLS, 'check-component.mjs'), join(dir, 'tools', 'check-component.mjs'));
+  const cc = (...a) => spawnSync(process.execPath, [join(dir, 'tools', 'check-component.mjs'), ...a], { cwd: dir, encoding: 'utf8' });
+  assert.equal(cc().status, 2, 'no name: usage');
+  let r = cc('Button');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /storybook-static is missing — run `npm run build-storybook` first/);
+  put(dir, 'storybook-static/index.json', '{"entries":{}}');
+  const old = new Date(Date.now() - 60000);
+  utimesSync(join(dir, 'storybook-static', 'index.json'), old, old);
+  put(dir, 'src/components/Button/Button.tsx', 'export const Button = () => null;\n');
+  r = cc('Button');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /older than src\/ — run `npm run build-storybook` first/);
+}));
+
+// ---- check-pages: the pages of the production build work ----
+const PM = await import(join(TOOLS, 'lib', 'pages-model.mjs'));
+
+test('check-pages model: links resolve to screens, not to the index, a server path or a missing id', () => {
+  const B = 'http://127.0.0.1:5000/';
+  const c = (h, ids = []) => PM.classifyLink(h, B, ['home', 'a b'], {}, (id) => ids.includes(id));
+  assert.equal(c('#/home').kind, 'screen');
+  assert.equal(c('#/a%20b').kind, 'screen');
+  assert.match(c('#/nowhere').why, /no screen "nowhere"/);
+  assert.match(c('#/').why, /index/);
+  assert.match(c('#').why, /index/);
+  assert.match(c('/orders').why, /path of the server/);
+  assert.equal(c('https://example.com/x').kind, 'external');
+  assert.equal(c('mailto:a@b.c').kind, 'external');
+  assert.equal(c('#sec', ['sec']).kind, 'anchor');
+  assert.match(c('#sec').why, /no element/);
+  assert.equal(PM.classifyLink('#/orders-list', B, ['orders'], { orders: '#/orders-list' }).kind, 'screen');
+  // a flow screen not built yet (mid-flow, check:task) and a page of the app outside the flow are notes, not broken links
+  const app = new Map([['billing', 'a flow screen not built yet'], ['scans', 'a page of the app outside the flow']]);
+  assert.deepEqual(PM.classifyLink('#/billing', B, ['home'], {}, () => false, app), { kind: 'elsewhere', id: 'billing', why: 'a flow screen not built yet' });
+  assert.equal(PM.classifyLink('#/scans', B, ['home'], {}, () => false, app).kind, 'elsewhere');
+  assert.equal(PM.classifyLink('#/nowhere', B, ['home'], {}, () => false, app).kind, 'bad', 'a route the app does not have is still broken');
+});
+
+test('check-pages model: budgets, basics and which widths fail', () => {
+  assert.deepEqual(PM.perfProblems({ cls: 0.1, lcpMs: 2500, imageBytes: 1_000_000 }), []);
+  assert.deepEqual(PM.perfProblems({ cls: 0.25, lcpMs: 3100, imageBytes: 1_500_000 }), ['CLS 0.250 > 0.1', 'LCP 3.10 s > 2.5 s', 'images 1.50 MB > 1 MB']);
+  assert.deepEqual(PM.seoProblems({ title: 'x', h1Count: 1, lang: 'en' }), []);
+  assert.equal(PM.seoProblems({ title: ' ', h1Count: 2, lang: '' }).length, 3);
+  const p = PM.widthPlan([1440, 1440, 1024]);
+  assert.deepEqual(p.cap, [1024, 1440]);
+  assert.deepEqual(p.other, [320, 375, 768, 1920]);
+  assert.deepEqual(PM.widthPlan([]).cap, [1440]);
+});
+
+test('check-pages (browser): clean screens pass; a console error, a bad link, a missing h1, a 3000 px element fail; other widths are only reported', () => withRepo((dir) => {
+  copyFileSync(join(TOOLS, 'check-pages.mjs'), join(dir, 'tools', 'check-pages.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'browser.mjs'), join(dir, 'tools', 'lib', 'browser.mjs'));
+  copyFileSync(join(TOOLS, 'lib', 'pages-model.mjs'), join(dir, 'tools', 'lib', 'pages-model.mjs'));
+  // a hand-made "build": the Workbench's hash routing without React
+  const screensHtml = {
+    good: '<h1>Good</h1><a href="#/wide">next</a> <a href="https://example.com">out</a>',
+    noisy: '<h1>Noisy</h1><script>console.error("boom")</script>',
+    linky: '<h1>Linky</h1><a href="#/nowhere">x</a>',
+    wide: '<h1>Wide</h1><div style="width:1000px">x</div>',
+    flat: '<p>no heading</p>',
+  };
+  const page = (w) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>T</title></head><body><div id="r"></div><script>
+const S=${JSON.stringify(screensHtml).replace("width:1000px", `width:${w}px`).replace(/</g, "\\u003c")};
+function go(){const id=decodeURIComponent(location.hash.replace(/^#\\/?/,''));const r=document.getElementById('r');
+ if(S[id]){r.innerHTML='<main>'+S[id]+'</main>';r.querySelectorAll('script').forEach(s=>{const n=document.createElement('script');n.textContent=s.textContent;document.body.appendChild(n);});}
+ else r.innerHTML='<main data-workbench-index><h1>Screens</h1><ul>'+Object.keys(S).map(k=>'<li><a href="#/'+encodeURIComponent(k)+'">'+k+'</a></li>').join('')+'</ul></main>';}
+addEventListener('hashchange',go);go();</script></body></html>`;
+  put(dir, 'dist/index.html', page(1000));
+  put(dir, 'extraction/baseline/x.json', JSON.stringify({ meta: { viewport: { width: 1440, height: 900 } } }));
+  const check = () => spawnSync(process.execPath, [join(dir, 'tools', 'check-pages.mjs'), 'dist'], { cwd: dir, encoding: 'utf8', timeout: 120000 });
+  const r = check();
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /✓ good\n/);
+  assert.match(r.stdout, /✗ noisy: console error: boom/);
+  assert.match(r.stdout, /✗ linky: link #\/nowhere: no screen "nowhere"/);
+  assert.match(r.stdout, /✗ flat: no <h1>/);
+  assert.match(r.stdout, /✓ wide\n/);   // 1000 px fits the captured 1440 ...
+  assert.match(r.stdout, /note: overflow at 320 px, not captured in the app: its behaviour at 320 px is unknown/);   // ... and is only reported at 320
+  assert.match(r.stdout, /external \(not fetched\): https:\/\/example\.com/);
+  assert.match(r.stdout, /check:pages: 5 screens, 3 problems/);
+  put(dir, 'dist/index.html', page(3000));
+  assert.match(check().stdout, /✗ wide: horizontal scroll at 1440 px/);
 }));

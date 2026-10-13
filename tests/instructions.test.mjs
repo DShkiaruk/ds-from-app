@@ -160,3 +160,14 @@ test('T7.3: icons come from the captures (FRONTEND.md and build-page)', async ()
   assert.match(T('FRONTEND.md'), sentence);
   assert.match(T('.claude/skills/build-page/SKILL.md'), sentence);
 });
+
+test('the harness has the client-handoff skill (Eleken harness: build-page, frontend-qa, client-handoff), routed from AGENTS.md', () => {
+  const T = (f) => readFileSync(new URL(`../templates/workbench/${f}`, import.meta.url), 'utf8');
+  const s = T('.claude/skills/client-handoff/SKILL.md');
+  assert.match(s, /^---\nname: client-handoff\ndescription: .+\n---/);
+  assert.match(s, /HANDOFF\.md/);
+  assert.match(s, /\.env\.example/);
+  assert.match(s, /Never push, publish, send or deploy/);
+  assert.match(s, /never leave one out/);
+  assert.match(T('AGENTS.md'), /«готуй передачу» → the client-handoff skill/);
+});

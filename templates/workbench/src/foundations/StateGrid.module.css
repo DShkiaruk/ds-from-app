@@ -1,0 +1,7 @@
+/* Review chrome around a component's states: neutral literals on purpose (like TokenTable), so it never borrows the product's tokens. */
+.grid { display: flex; flex-wrap: wrap; gap: 32px 40px; margin: 0; padding: 0; list-style: none; }
+.cell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.stage { display: flex; align-items: center; min-height: 48px; }
+.missing { display: flex; align-items: center; min-height: 48px; padding: 0 12px; border: 1px dashed #8a8982; border-radius: 6px; }
+.note { font: 12px/1.4 system-ui, sans-serif; color: #4a4943; }
+.name { font: 600 12px/1.4 ui-monospace, monospace; color: #4a4943; }

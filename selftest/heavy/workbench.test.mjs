@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync, existsSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { startServer } from '../server.mjs';
@@ -13,7 +13,7 @@ const sh = (cmd, args, cwd, env = {}) => new Promise((ok) => execFile(cmd, args,
   { cwd, env: { ...process.env, ...env }, maxBuffer: 256 << 20, timeout: 840000 },
   (err, stdout, stderr) => ok({ status: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout, stderr, out: `${stdout}${stderr}` })));
 
-// The flow screen as build-page builds it: ASCII folder, tokens only, story «Screens/огляд». Token names are the ones
+// The flow screen as build-page builds it: ASCII folder, tokens only, story «Screens/overview». Token names are the ones
 // the fixture extraction generates into src/tokens/tokens.json (checked in the test before use).
 const SCREEN = {
   css: `.card {
@@ -50,7 +50,7 @@ export function Overview() {
   story: `import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Overview } from './Overview';
 
-const meta: Meta<typeof Overview> = { title: 'Screens/огляд', component: Overview };
+const meta: Meta<typeof Overview> = { title: 'Screens/overview', component: Overview };
 export default meta;
 export const Default: StoryObj<typeof Overview> = {};
 `,
@@ -128,12 +128,18 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     const GOOD = {
       tsx: "import s from './Probe.module.css';\nexport function Probe() { return <p className={s.x}>Probe</p>; }\n",
       css: `.x { color: var(${colorVar}); }\n`,
-      story: "import type { Meta, StoryObj } from '@storybook/react-vite';\nimport { Probe } from './Probe';\n\nconst meta: Meta<typeof Probe> = { title: 'Components/Probe', component: Probe };\nexport default meta;\nexport const Default: StoryObj<typeof Probe> = {};\n",
+      story: "import type { Meta, StoryObj } from '@storybook/react-vite';\nimport { StateGrid, pseudoStates } from '../../foundations/StateGrid';\nimport { Probe } from './Probe';\n\nconst meta: Meta<typeof Probe> = { title: 'Components/Probe', component: Probe };\nexport default meta;\nexport const Default: StoryObj<typeof Probe> = {};\nexport const States: StoryObj<typeof Probe> = {\n  parameters: { pseudo: pseudoStates() },\n  render: () => <StateGrid states={[{ name: 'default', node: <Probe /> }, { name: 'hover', id: 'hover', node: <Probe /> }, { name: 'active (pressed)' }]} />,\n};\n",
       index: "export { Probe } from './Probe';\n",
     };
     const restore = () => { for (const k of Object.keys(F)) writeFileSync(F[k], GOOD[k]); };
     restore();
     await green('check:fast', 'valid Probe');
+    // Docs pages: a component has one, Foundations have none (a Screens/<screen> story has none either, checked after step 12)
+    await green('build-storybook', 'valid Probe');
+    const docsIds = () => Object.values(JSON.parse(readFileSync(join(repo, 'storybook-static', 'index.json'), 'utf8')).entries).filter((e) => e.type === 'docs').map((e) => e.id);
+    assert.ok(docsIds().includes('components-probe--docs'), `a Docs page for the component: ${docsIds()}`);
+    assert.ok(!docsIds().some((id) => id.startsWith('foundations-') && id !== 'foundations-overview--docs'), `no autodocs page for the Foundations stories: ${docsIds()}`);
+    assert.ok(docsIds().includes('foundations-overview--docs'), `Foundations/Overview (the generated MDX) is there: ${docsIds()}`);
 
     const plant = async (file, content, script, why, pattern) => {
       writeFileSync(F[file], content);
@@ -147,6 +153,10 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     rmSync(F.story);
     try { await red('check:stories', 'a component without a story', /\.claude\/skills\/build-page\/SKILL\.md/); } finally { restore(); }
     await green('check:stories', 'story restored');
+    // a story titled where the file does not live (a shared component under Screens/): gate 5 names the file and the prefix
+    writeFileSync(F.story, GOOD.story.replace("'Components/Probe'", "'Screens/Probe'"));
+    try { await red('check:stories', 'a component story titled Screens/Probe', /src\/components\/Probe\/Probe\.stories\.tsx: title 'Screens\/Probe' must start with 'Components\/'/); } finally { restore(); }
+    await green('check:stories', 'story title restored');
     // a hand edit of a generated token file
     const colorCss = join(repo, 'src', 'tokens', 'color.css');
     const colorOrig = readFileSync(colorCss, 'utf8');
@@ -185,6 +195,29 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     r = await npm('check');
     assert.equal(r.status, 0, `npm run check must be green\n${r.out.slice(-4000)}`);
     assert.match(r.stdout, /gates: 10 passed, 0 failed/);
+    assert.ok(!docsIds().includes('screens-overview--docs'), 'a screen has no Docs page');
+
+    // 12b. the build gate also opens the pages (check-pages): one planted defect per check, red with its message, green again
+    const buildGate = () => sh('node', ['tools/gates.mjs', 'build'], repo);
+    r = await buildGate();
+    assert.equal(r.status, 0, `the build gate is green on the clean screen\n${r.out.slice(-3000)}`);
+    assert.match(r.stdout, /✓ build, and the pages work/);
+    const overview = join(sdir, 'Overview.tsx');
+    const plantPage = async (edit, pattern, why) => {
+      writeFileSync(overview, edit(SCREEN.tsx));
+      try {
+        const x = await buildGate();
+        assert.notEqual(x.status, 0, `${why}: the build gate must go red\n${x.out.slice(-2000)}`);
+        assert.match(x.out, /✗ build, and the pages work/);
+        assert.match(x.out, pattern, `${why}: the message`);
+      } finally { writeFileSync(overview, SCREEN.tsx); }
+      const g = await buildGate();
+      assert.equal(g.status, 0, `${why} (removed): the build gate is green again\n${g.out.slice(-2000)}`);
+    };
+    await plantPage((t) => t.replace('  return (', "  console.error('planted boom');\n  return ("), /console error: planted boom/, 'a console.error in a screen');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<h1>Fixture</h1><a href="#/nowhere">Gone</a>'), /link #\/nowhere: no screen "nowhere"/, 'a link to #/nowhere');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<h1>Fixture</h1><div style={{ width: 3000, height: 4 }} />'), /horizontal scroll at 1440 px/, 'a 3000 px wide element');
+    await plantPage((t) => t.replace('<h1>Fixture</h1>', '<p>Fixture</p>'), /no <h1>/, 'a screen without an h1');
 
     // 13. compare: one screen, a relative product image that exists next to compare.html
     r = await npm('compare');
@@ -260,6 +293,9 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     const afterK = stamp();
     assert.ok(afterK?.ok === true && afterK.fingerprint !== beforeK?.fingerprint, 'the gates ran on the clean non-ASCII change and passed');
     rmSync(kdir, { recursive: true, force: true });
+    // DSFA_KEEP_WORKBENCH=<dir>: keep this green Workbench (a synthetic app, no client data), without node_modules and
+    // build output, to run its CI on a real runner
+    if (process.env.DSFA_KEEP_WORKBENCH) cpSync(repo, process.env.DSFA_KEEP_WORKBENCH, { recursive: true, filter: (src) => !/[\\/](node_modules|dist|storybook-static)([\\/]|$)/.test(src.slice(repo.length)) });
   } finally {
     S.close();
     rmSync(home, { recursive: true, force: true });
