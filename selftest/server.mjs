@@ -15,6 +15,7 @@ let html = htmlTemplate;   // __XORIGIN__ (the fixture's cross-origin font style
 const flowsHtml = readFileSync(join(F, 'flows.html'), 'utf8');
 const literalHtml = readFileSync(join(F, 'literal.html'), 'utf8');
 const spaHtml = readFileSync(join(F, 'spa.html'), 'utf8');
+const actionsHtml = readFileSync(join(F, 'actions.html'), 'utf8');
 // A font service's stylesheet: linked through the other host name (localhost vs 127.0.0.1), so it is cross-origin.
 const FONT_CSS = '@font-face { font-family: "Fixture Web"; font-style: normal; font-weight: 400; src: url(fixture-web.woff2) format("woff2"); unicode-range: U+0000-00FF; }';
 const SPRITE = '<svg xmlns="http://www.w3.org/2000/svg"><symbol id="icon-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle></symbol></svg>';
@@ -40,6 +41,7 @@ export async function startServer() {
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }
     if (req.url.startsWith('/nothing-here')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body></body></html>'); return; }
     if (req.url.startsWith('/rows')) { res.end(ROWS); return; }
+    if (req.url.startsWith('/actions')) { res.end(actionsHtml); return; }
     if (req.url.startsWith('/menu')) { res.end(MENU); return; }
     if (req.url.startsWith('/workbench-index')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body><main data-workbench-index><h1>Screens</h1><a href="#/x">x</a></main></body></html>'); return; }
     // R28.1: a prototype page without the product's prototype-only top bar — its content starts at the top of the page

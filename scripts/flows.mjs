@@ -23,7 +23,11 @@
 // inside a form that is not type=button, or one whose name reads like an action on data (delete, save, send, create,
 // pay, invite, archive, sign out …) — or when its only name is an icon that reads so (a trash can), or when it unmasks
 // what the page hides (REVEAL: "Show" beside a secret, an eye icon): its screenshot would hold the secret. Links to
-// other origins and downloads are skipped. Refusals are listed, not silent. Nothing is typed. Repeated rows (sixty
+// other origins and downloads are skipped. Refusals are listed, not silent. Clickable rows that are not controls (a table
+// row with a delegated click handler) are pressed like controls, one per group of siblings (`group: N`), under the same
+// name checks. A press that opens a layer (menu, dialog, drawer) is followed one level down: its controls are judged
+// the same way and each safe one pressed once (`inside`). A tab press that changes its panel in place, with no capture
+// holding that click, is listed (`uncapturedTabs`) with the capture command. Nothing is typed. Repeated rows (sixty
 // account links) are one pattern: the first two of each are pressed.
 //
 // --allow <regex>: a control whose whole name matches is pressed although UNSAFE matches it — a menu item named
@@ -57,9 +61,9 @@ const ONLY = many('--only');
 // The screens: explicit --url, else every distinct resting URL the baseline captures were taken at, plus every capture
 // taken --as-screen (a screen reached by clicks at a URL other screens share).
 let screensIn = many('--url').map((u) => ({ url: u, clicks: [] }));
+const capDir = join(P.spec, 'baseline');
+const caps = existsSync(capDir) ? readdirSync(capDir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(capDir, f), 'utf8'))).filter((c) => c.meta?.tool === 'capture.mjs') : [];
 if (!screensIn.length) {
-  const dir = join(P.spec, 'baseline');
-  const caps = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8'))).filter((c) => c.meta?.tool === 'capture.mjs') : [];
   const base = (c) => !c.meta.rootSet && (c.meta.colorScheme || 'light') === 'light' && c.meta.viewport?.width >= 1024;
   // resting states: a capture reached by a click, or with a theme class set, is not a screen of its own — unless it was
   // taken --as-screen
@@ -78,7 +82,7 @@ const pattern = (u) => { try { const x = new URL(u); return x.pathname.split('/'
 
 // In the page: the visible controls, each with its role, accessible name, a selector to find it again, the icon it
 // draws (for a control whose only name is its icon), and whether it sits in repeated data (a table body, a list of rows).
-const CONTROLS = () => {
+const CONTROLS = (inner) => {
   const sel = 'a[href], button, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="switch"], [role="checkbox"], summary, [aria-haspopup], [aria-expanded]';
   const out = [];
   const seen = new Set();
@@ -88,7 +92,10 @@ const CONTROLS = () => {
     const svg = el.querySelector('svg'); const cls = (svg?.getAttribute('class') || '') + ' ' + (el.querySelector('[class*="icon-"], [class*="anticon-"]')?.getAttribute('class') || '');
     const m = cls.match(/(?:lucide-|anticon-|icon-|tabler-icon-|heroicon-)([a-z0-9-]+)/i); return m ? m[1] : '';
   };
-  for (const el of document.querySelectorAll(sel)) {
+  // inner: only what sits inside an opened layer (a menu, a dialog, a drawer), option rows included
+  const layers = inner ? [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], [popover], dialog[open], [data-state="open"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }) : [document];
+  const found = layers.flatMap((l) => [...l.querySelectorAll(inner ? sel + ', [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"]' : sel)]);
+  for (const el of found) {
     if (seen.has(el)) continue; seen.add(el);
     const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
     if (!r.width || !r.height || cs.visibility === 'hidden' || cs.display === 'none') continue;
@@ -96,7 +103,9 @@ const CONTROLS = () => {
     const role = el.getAttribute('role') || (el.tagName === 'A' ? 'link' : el.tagName === 'SUMMARY' ? 'button' : el.tagName.toLowerCase());
     out.push({
       role, name, selector: cssPath(el), href: el.getAttribute('href'), type: el.getAttribute('type'), icon: iconOf(el),
-      inForm: Boolean(el.closest('form')), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
+      inTablist: Boolean(el.closest('[role="tablist"]')),
+      // tabs drawn without ARIA (buttons in a div.tabs): a "tab" / "tabs" class on the control or its parent
+      tabLike: /(^|[\s_-])tabs?($|[\s_-])/i.test(`${typeof el.className === 'string' ? el.className : ''} ${typeof el.parentElement?.className === 'string' ? el.parentElement.className : ''}`), inForm: Boolean(el.closest('form')), disabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
       inData: Boolean(el.closest('tbody, [role="row"], [role="rowgroup"] [role="row"], ul li, ol li, [role="listitem"]')),
       expanded: el.getAttribute('aria-expanded'), selected: el.getAttribute('aria-selected') ?? el.getAttribute('aria-current'),
     });
@@ -104,8 +113,8 @@ const CONTROLS = () => {
   return out;
 };
 // In the page: the outermost visible elements that draw a pointer cursor but are not controls (a table row that opens a
-// record through a delegated handler). They are reported, never pressed: a row's name is data, so no name check can
-// judge what pressing it does.
+// record through a delegated handler). They are pressed like controls, under the same name checks; of a group of
+// siblings (same tag and class) only the first is listed, with the size of the group.
 const UNPRESSED = () => {
   const ctl = 'a[href], button, input, select, textarea, summary, label, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="switch"], [role="checkbox"], [role="combobox"], [aria-haspopup], [aria-expanded]';
   const cssPath = (el) => { const parts = []; let n = el; while (n && n.nodeType === 1 && parts.length < 10) { let p = n.tagName.toLowerCase(); if (n.id && !/^(base-ui|radix|headlessui|:r|rc_|rc-)|uuid|\d{4,}/.test(n.id)) { parts.unshift(`${p}#${CSS.escape(n.id)}`); break; } const sib = [...(n.parentElement?.children || [])].filter((c) => c.tagName === n.tagName); if (sib.length > 1) p += `:nth-of-type(${sib.indexOf(n) + 1})`; parts.unshift(p); n = n.parentElement; } return parts.join('>'); };
@@ -120,7 +129,9 @@ const UNPRESSED = () => {
     if (el.parentElement && taken.has(el.parentElement)) { taken.add(el); continue; }
     if (el.parentElement && el.parentElement !== document.body && getComputedStyle(el.parentElement).cursor === 'pointer') continue;
     taken.add(el);
-    out.push({ text: (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80), selector: cssPath(el) });
+    const sibs = [...(el.parentElement?.children || [])].filter((c) => c.tagName === el.tagName && c.className === el.className);
+    if (sibs[0] !== el) continue;
+    out.push({ text: (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80), selector: cssPath(el), group: sibs.length });
   }
   return out;
 };
@@ -189,8 +200,36 @@ for (const s of allScreens) { await openScreen(s); landmarkOf.set(s.name ?? s.ur
 const screenByLandmark = (mark) => [...landmarkOf.entries()].find(([, m]) => m && m === mark)?.[0];
 
 const ROLE_OF = { link: 'link', button: 'button', tab: 'tab', menuitem: 'menuitem', checkbox: 'checkbox', switch: 'switch', combobox: 'combobox' };
+// One verdict for every control the mapper might press (the page's, a clickable row, one inside an opened layer):
+// { skip: why } | { refuse: {…} } | { allowed: bool } (pressable; allowed: UNSAFE matched, --allow lifted it).
+const judge = (c, url, origin) => {
+  if (c.disabled) return { skip: 'disabled' };
+  if (c.href && /^(mailto|tel|javascript):/i.test(c.href)) return { skip: 'not a page' };
+  if (c.href && !c.href.startsWith('#')) { try { if (new URL(c.href, url).origin !== origin) return { skip: 'another origin' }; } catch { /* relative */ } }
+  // In a data row the name carries the row's data ("Edit Create your first guide"): the verb is its first word.
+  const verb = c.inData ? c.name.split(' ')[0] : c.name;
+  if (DENY && c.name && DENY.test(c.name)) return { refuse: { role: c.role, name: c.name, why: 'denied for this product (--deny)' } };
+  if (REVEAL.test(verb) || REVEAL_ICON.test(c.icon)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'unmasks something the page hides' } };
+  const risky = c.type === 'submit' || (c.inForm && c.role === 'button' && c.type !== 'button') || UNSAFE.test(verb) || (!c.name && UNSAFE.test(c.icon));
+  if (risky && !(ALLOW && c.name && ALLOW.test(c.name) && c.type !== 'submit')) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'could change data' } };
+  return { allowed: risky };
+};
 const screens = [];
 const unknownLandmarks = new Set();
+// What a press did, from the page before and after it.
+const effectOf = (before, after, id, own, origin) => {
+  const newSurfaces = after.surfaces.filter((x, i) => after.surfaces.slice(0, i).concat(before.surfaces).filter((y) => y === x).length < after.surfaces.filter((y) => y === x).length);
+  // Another screen at the same URL: the landmark moved to one a capture holds (the surfaces rule first — a dialog
+  // with its own heading is a surface, not a screen).
+  const toScreen = landmarkOf.size && after.url === before.url && after.landmark !== before.landmark && after.surfaces.length <= before.surfaces.length ? screenByLandmark(after.landmark) : undefined;
+  if (landmarkOf.size && after.url === before.url && after.landmark !== before.landmark && after.landmark && after.landmark !== own && !toScreen && after.surfaces.length <= before.surfaces.length) unknownLandmarks.add(after.landmark);
+  return after.url !== before.url && new URL(after.url).origin === origin
+    ? { kind: 'navigate', to: new URL(after.url).pathname + new URL(after.url).search + new URL(after.url).hash, pattern: pattern(after.url) }
+    : toScreen && toScreen !== id ? { kind: 'navigate', toScreen, landmark: after.landmark }
+    : after.surfaces.length > before.surfaces.length ? { kind: 'open', surface: newSurfaces[0] ?? after.surfaces.at(-1), addedElements: after.elements - before.elements }
+    : after.textHash !== before.textHash || Math.abs(after.elements - before.elements) > 0 ? { kind: 'change', addedElements: after.elements - before.elements }
+    : { kind: 'none' };
+};
 let shots = 0;
 for (const s of screensIn) {
   const url = s.url;
@@ -200,28 +239,32 @@ for (const s of screensIn) {
   const all = await page.evaluate(CONTROLS);
   const title = await page.evaluate(() => document.querySelector('h1')?.innerText?.trim() ?? document.title);
   const own = (await page.evaluate(SNAP, LANDMARK)).landmark;
-  const unpressed = await page.evaluate(UNPRESSED);
+  const rows = await page.evaluate(UNPRESSED);
   // One pattern for repeated data: the first two controls that share role and target pattern.
   const perPattern = new Map();
   const todo = [];
-  const refused = [], skipped = [], allowed = [];
+  const refused = [], skipped = [], allowed = [], unpressed = [];
   for (const c of all) {
-    if (c.disabled) { skipped.push({ ...c, why: 'disabled' }); continue; }
-    if (c.href && /^(mailto|tel|javascript):/i.test(c.href)) { skipped.push({ ...c, why: 'not a page' }); continue; }
-    if (c.href && !c.href.startsWith('#')) { try { if (new URL(c.href, url).origin !== origin) { skipped.push({ ...c, why: 'another origin' }); continue; } } catch { /* relative */ } }
-    // In a data row the name carries the row's data ("Edit Create your first guide"): the verb is its first word.
-    const verb = c.inData ? c.name.split(' ')[0] : c.name;
-    if (DENY && c.name && DENY.test(c.name)) { refused.push({ role: c.role, name: c.name, why: 'denied for this product (--deny)' }); continue; }
-    if (REVEAL.test(verb) || REVEAL_ICON.test(c.icon)) { refused.push({ role: c.role, name: c.name, icon: c.icon || undefined, why: 'unmasks something the page hides' }); continue; }
-    const risky = c.type === 'submit' || (c.inForm && c.role === 'button' && c.type !== 'button') || UNSAFE.test(verb) || (!c.name && UNSAFE.test(c.icon));
-    if (risky && !(ALLOW && c.name && ALLOW.test(c.name) && c.type !== 'submit')) { refused.push({ role: c.role, name: c.name, icon: c.icon || undefined, why: 'could change data' }); continue; }
-    if (risky) allowed.push({ role: c.role, name: c.name });
+    const j = judge(c, url, origin);
+    if (j.skip) { skipped.push({ ...c, why: j.skip }); continue; }
+    if (j.refuse) { refused.push(j.refuse); continue; }
+    if (j.allowed) allowed.push({ role: c.role, name: c.name });
     const key = c.inData ? `${c.role}|${c.href ? pattern(new URL(c.href, url).href) : c.name.replace(/\d+/g, '#')}` : `${c.role}|${c.name}|${c.selector}`;
     const n = perPattern.get(key) || 0; perPattern.set(key, n + 1);
     if (c.inData && n >= 2) continue;
     todo.push(c);
   }
+  // Clickable rows (not controls): one representative per group, under the same name checks. A row's name is data, so
+  // the check is on the whole text (over-refusing a row is listed, not silent).
+  for (const r of rows) {
+    const c = { role: 'row', name: r.text, selector: r.selector, group: r.group, type: null, href: null, icon: '', inForm: false, inData: false, disabled: false };
+    const j = judge(c, url, origin);
+    if (j.refuse) { refused.push(j.refuse); unpressed.push({ text: r.text, selector: r.selector, why: j.refuse.why }); continue; }
+    if (j.allowed) allowed.push({ role: 'row', name: c.name });
+    todo.push(c);
+  }
   const transitions = [];
+  const tabs = [];
   // the control load: what the page does by itself between the moment a press is made and the moment its effect is read
   const control = {};
   if (todo.length) {
@@ -232,35 +275,66 @@ for (const s of screensIn) {
     control.after = await page.evaluate(SNAP, LANDMARK);
     control.changed = control.after.elements !== control.before.elements || control.after.textHash !== control.before.textHash;
   }
+  const settle = async () => { await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {}); await page.waitForTimeout(SETTLE); };
+  // a selector that no longer matches (a generated id, a list re-ordered by the load) — the control by role and name
+  const locate = async (c) => {
+    let loc = page.locator(c.selector).first();
+    if (!(await loc.count().catch(() => 0)) && c.name && c.role !== 'row') loc = page.getByRole(ROLE_OF[c.role] ?? c.role, { name: c.name, exact: true }).first();
+    return (await loc.count().catch(() => 0)) ? loc : null;
+  };
+  const known = new Set(all.map((c) => c.selector));
   for (const c of todo) {
     await openScreen(s);
     const before = await page.evaluate(SNAP, LANDMARK);
-    let loc = page.locator(c.selector).first();
-    // a selector that no longer matches (a generated id, a list re-ordered by the load) — the control by role and name
-    if (!(await loc.count()) && c.name) loc = page.getByRole(ROLE_OF[c.role] ?? c.role, { name: c.name, exact: true }).first();
-    if (!(await loc.count().catch(() => 0))) { transitions.push({ control: { role: c.role, name: c.name, selector: c.selector }, effect: { kind: 'unreachable' } }); continue; }
-    try { await loc.click({ timeout: 3000 }); } catch (e) { transitions.push({ control: { role: c.role, name: c.name, selector: c.selector }, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(SETTLE);
+    const ref = { role: c.role, name: c.name, selector: c.selector };
+    const loc = await locate(c);
+    if (!loc) { transitions.push({ control: ref, effect: { kind: 'unreachable' } }); continue; }
+    try { await loc.click({ timeout: 3000 }); } catch (e) { transitions.push({ control: ref, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
+    await settle();
     const after = await page.evaluate(SNAP, LANDMARK);
-    const newSurfaces = after.surfaces.filter((x, i) => after.surfaces.slice(0, i).concat(before.surfaces).filter((y) => y === x).length < after.surfaces.filter((y) => y === x).length);
-    // Another screen at the same URL: the landmark moved to one a capture holds (the surfaces rule first — a dialog
-    // with its own heading is a surface, not a screen).
-    const toScreen = landmarkOf.size && after.url === before.url && after.landmark !== before.landmark && after.surfaces.length <= before.surfaces.length ? screenByLandmark(after.landmark) : undefined;
-    if (landmarkOf.size && after.url === before.url && after.landmark !== before.landmark && after.landmark && after.landmark !== own && !toScreen && after.surfaces.length <= before.surfaces.length) unknownLandmarks.add(after.landmark);
-    const effect = after.url !== before.url && new URL(after.url).origin === origin
-      ? { kind: 'navigate', to: new URL(after.url).pathname + new URL(after.url).search + new URL(after.url).hash, pattern: pattern(after.url) }
-      : toScreen && toScreen !== id ? { kind: 'navigate', toScreen, landmark: after.landmark }
-      : after.surfaces.length > before.surfaces.length ? { kind: 'open', surface: newSurfaces[0] ?? after.surfaces.at(-1), addedElements: after.elements - before.elements }
-      : after.textHash !== before.textHash || Math.abs(after.elements - before.elements) > 0 ? { kind: 'change', addedElements: after.elements - before.elements }
-      : { kind: 'none' };
+    const effect = effectOf(before, after, id, own, origin);
     if (effect.kind === 'change' && control.changed && after.elements === control.after.elements && after.textHash === control.after.textHash) { effect.kind = 'none'; effect.ownChange = 'the page ends the same with no press (control load)'; delete effect.addedElements; }
     if (effect.kind !== 'none' && effect.kind !== 'navigate') { const f = `flows/${(s.name || new URL(url).pathname).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root'}--${++shots}.png`; await page.screenshot({ path: join(P.spec, f) }).catch(() => {}); effect.screenshot = f; }
-    transitions.push({ control: { role: c.role, name: c.name, selector: c.selector, inData: c.inData, href: c.href, icon: c.icon || undefined }, effect });
+    const t = { control: { ...ref, inData: c.inData, href: c.href, icon: c.icon || undefined }, effect };
+    if (c.group > 1) { t.group = c.group; t.note = `${c.group} similar, pressed the first`; }
+    // One level down: a press that opened a layer — its own controls, each judged like the page's, each pressed once.
+    if (effect.kind === 'open') {
+      const inner = (await page.evaluate(CONTROLS, true)).filter((x, i, a) => !known.has(x.selector) && a.findIndex((y) => y.role === x.role && y.name === x.name) === i);
+      t.inside = { refused: [], pressed: [] };
+      const safe = [];
+      for (const x of inner) {
+        const j = judge(x, url, origin);
+        if (j.refuse) t.inside.refused.push({ name: x.name, why: j.refuse.why });
+        else if (!j.skip) safe.push(x);
+      }
+      for (const x of safe.slice(0, 12)) {
+        await openScreen(s);
+        const opener = await locate(c);
+        if (opener) { await opener.click({ timeout: 3000 }).catch(() => {}); await settle(); }
+        const b2 = await page.evaluate(SNAP, LANDMARK);
+        const l2 = await locate(x);
+        const rec = { role: x.role, name: x.name };
+        if (!opener || !l2) { t.inside.pressed.push({ ...rec, effect: { kind: 'unreachable' } }); continue; }
+        try { await l2.click({ timeout: 3000 }); } catch (e) { t.inside.pressed.push({ ...rec, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
+        await settle();
+        t.inside.pressed.push({ ...rec, effect: effectOf(b2, await page.evaluate(SNAP, LANDMARK), id, own, origin) });
+      }
+      if (safe.length > 12) t.inside.notPressed = safe.length - 12;
+    }
+    // A tab whose press changed the page in place leaves its panel uncaptured, unless a capture holds that click.
+    if ((c.role === 'tab' || c.inTablist || c.tabLike) && effect.kind === 'change') {
+      const held = caps.some((k) => k.meta.requestedUrl === url && k.meta.clicked?.at(-1)?.selector === c.selector && (k.meta.clicked?.length ?? 0) === s.clicks.length + 1);
+      if (!held) {
+        const scr = s.name ?? (new URL(url).pathname.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root');
+        const q = (x) => `'${x.replace(/'/g, `'\\''`)}'`;
+        tabs.push({ screen: scr, tab: c.name, selector: c.selector, command: `capture.mjs --url ${url} ${[...s.clicks, c.selector].map((x) => `--click ${q(x)}`).join(' ')} --screen ${scr}--${c.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'tab'}` });
+      }
+    }
+    transitions.push(t);
   }
-  screens.push({ url, name: s.name, clicks: s.clicks.length ? s.clicks : undefined, landmark: s.shared ? own : undefined, path: new URL(url).pathname + new URL(url).search, pattern: pattern(url), title, controls: all.length, pressed: todo.length, refused, allowed: allowed.length ? allowed : undefined, skipped: skipped.length, transitions, unpressed: unpressed.length ? unpressed.slice(0, 20) : undefined, unpressedCount: unpressed.length });
+  screens.push({ url, name: s.name, clicks: s.clicks.length ? s.clicks : undefined, landmark: s.shared ? own : undefined, path: new URL(url).pathname + new URL(url).search, pattern: pattern(url), title, controls: all.length, pressed: todo.length, refused, allowed: allowed.length ? allowed : undefined, skipped: skipped.length, transitions, unpressed: unpressed.length ? unpressed.slice(0, 20) : undefined, unpressedCount: unpressed.length, uncapturedTabs: tabs.length ? tabs : undefined });
   const k = (x) => transitions.filter((t) => t.effect.kind === x).length;
-  console.log(`  ${String(s.name ?? pattern(url)).padEnd(32)} ${all.length} controls: ${k('navigate')} navigate · ${k('open')} open · ${k('change')} change · ${k('none')} none · ${refused.length} refused${allowed.length ? ` · ${allowed.length} allowed` : ''}${unpressed.length ? ` · ${unpressed.length} clickable, not controls (not pressed)` : ''}`);
+  console.log(`  ${String(s.name ?? pattern(url)).padEnd(32)} ${all.length} controls: ${k('navigate')} navigate · ${k('open')} open · ${k('change')} change · ${k('none')} none · ${refused.length} refused${allowed.length ? ` · ${allowed.length} allowed` : ''}${transitions.some((t) => t.control.role === 'row') ? ` · ${transitions.filter((t) => t.control.role === 'row').length} clickable rows pressed` : ''}${unpressed.length ? ` · ${unpressed.length} clickable rows refused, not pressed` : ''}${transitions.some((t) => t.inside) ? ` · ${transitions.reduce((n, t) => n + (t.inside?.pressed.length || 0), 0)} pressed inside opened layers (${transitions.reduce((n, t) => n + (t.inside?.refused.length || 0), 0)} refused)` : ''}`);
 }
 await browser.close();
 const blocked = blockedLists ? blockedLists.flat() : null;
@@ -280,7 +354,12 @@ const reachable = [...new Set(T.filter((t) => t.effect.kind === 'navigate' && t.
 if (reachable.length) { doc.uncaptured = reachable; console.log(`  reachable but not captured (${reachable.length}): ${reachable.slice(0, 12).join(', ')} — capture them (capture.mjs), or tell the designer why not (your report)`); }
 if (unknownLandmarks.size) { doc.uncapturedLandmarks = [...unknownLandmarks]; console.log(`  pages reached at the same URL that no capture holds (${unknownLandmarks.size}): ${[...unknownLandmarks].slice(0, 8).map((m) => `"${m}"`).join(', ')} — capture them --as-screen, or tell the designer why not (your report)`); }
 const withUnpressed = merged.filter((s) => s.unpressedCount);
-if (withUnpressed.length) console.log(`  clickable elements that are not controls were not pressed (${withUnpressed.reduce((n, s) => n + s.unpressedCount, 0)} on ${withUnpressed.length} screens, e.g. "${withUnpressed[0].unpressed[0].text}") — what they open is unknown; capture one with --click '<selector>' --as-screen if the designer wants that screen`);
+if (withUnpressed.length) console.log(`  clickable rows (not controls) refused as unsafe, not pressed (${withUnpressed.reduce((n, s) => n + s.unpressedCount, 0)} on ${withUnpressed.length} screens, e.g. "${withUnpressed[0].unpressed[0].text}") — what they open is unknown; capture one with --click '<selector>' --as-screen if the designer wants that screen`);
+const tabsOpen = merged.flatMap((s) => s.uncapturedTabs || []);
+if (tabsOpen.length) {
+  doc.uncapturedTabs = tabsOpen;
+  console.log(`  tab panels no capture holds (${tabsOpen.length}): ${tabsOpen.slice(0, 12).map((t) => `${t.screen} \u203a ${t.tab}`).join(', ')} — capture each the flow needs, e.g. node scripts/${tabsOpen[0].command}`);
+}
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
 const sockLine = blockedLists ? socketSummary(...blockedLists) : null;
