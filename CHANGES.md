@@ -1,5 +1,20 @@
 # Changes
 
+## 0.1.4 — 2026-10-14
+
+- **The Workbench's CI checked on GitHub Actions** (a private repository with a synthetic Workbench, no client data).
+  The first run failed: the build gate's page check counted a web-font stylesheet on another origin, out of the
+  runner's reach, as the Workbench's error. Now a resource from another origin that does not load is a warning (the
+  network, not the Workbench); a file of the build that is missing still fails. Green on GitHub after the fix;
+  `actions/checkout` and `actions/setup-node` moved to v5 (v4 ran on a deprecated Node).
+- **A hosting platform's bot check stops the tools.** On the live pilot prototype Vercel's Security Checkpoint refused
+  the browser ("Failed to verify your browser, Code 21"), a visible Playwright window too. `capture.mjs` and
+  `flows.mjs` now recognise such a page, stop (exit 3) and say the ways on: the site's owner turns the protection off
+  for the run or allows this machine, or the designer gives a copy of the app's files. They never disguise the browser
+  and never retry in a loop.
+- **The checkpoint page's server exits by itself after Done**, and SKILL.md now says so: the second cold run had
+  stopped it with `pkill -f`, against the rule never to kill a process by name.
+
 ## 0.1.3 — 2026-10-14
 
 The Workbench's Storybook, looked at page by page in the pilot and rebuilt to read like a design system:
