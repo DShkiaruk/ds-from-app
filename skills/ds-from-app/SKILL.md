@@ -80,6 +80,7 @@ If git has no name/email, ask the designer for them — never invent one. Commit
 Workbench). Commit "Workbench from the extraction" (on main), with package-lock.json. Tell the designer in two lines what is in
 it — screens, how many tokens the app named itself and how many were proposed, what was left out as prototype-only —
 and that the tokens stay unchecked until the flow is rebuilt. Details: [references/flow.md](references/flow.md) § The Workbench.
+A Workbench made with an older plugin: `scaffold.mjs update <repo>`, then npm install and npm run check, as one commit the designer approves.
 Then ask the designer to open Claude Code in `<repo>` (a new session there; trust the folder when asked) and say
 «склади план» — the repo's own rules, checks and skills load only in a session started there.
 

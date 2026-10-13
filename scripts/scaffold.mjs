@@ -4,6 +4,7 @@
 //
 //   node scripts/scaffold.mjs init <dir> --product "<Name>" --url <app-url>
 //   node scripts/scaffold.mjs workbench <repo>
+//   node scripts/scaffold.mjs update <repo>   (a Workbench made by an older plugin: see update() below)
 //
 // Creates extraction/ (baseline/, canon/, capture-manifest.json, tokens.json carrying the closure sentence),
 // .gitignore (sign-in sessions never enter the repository) and `git init`. Run again on a repository it made, it
@@ -32,8 +33,8 @@ const slugOf = (...names) => {
 
 const [cmd, dirArg, ...rest] = process.argv.slice(2);
 const opt = (k) => { const i = rest.indexOf(`--${k}`); const v = i > -1 ? rest[i + 1] : undefined; return v === undefined || v.startsWith('--') ? undefined : v; }; // a flag is not a value
-const USAGE = 'usage: node scripts/scaffold.mjs init <dir> --product "<Name>" --url <app-url>\n       node scripts/scaffold.mjs workbench <repo>';
-if (!['init', 'workbench'].includes(cmd) || !dirArg) { console.error(USAGE); process.exit(1); }
+const USAGE = 'usage: node scripts/scaffold.mjs init <dir> --product "<Name>" --url <app-url>\n       node scripts/scaffold.mjs workbench <repo>\n       node scripts/scaffold.mjs update <repo>';
+if (!['init', 'workbench', 'update'].includes(cmd) || !dirArg) { console.error(USAGE); process.exit(1); }
 
 // The product's slug for the example folder: from --product, else from the manifest the repository already has, else a placeholder.
 function knownSlug(dir) {
@@ -122,8 +123,64 @@ function workbench(dir) {
   console.log('next: npm install, then npm run check:fast; commit "Workbench from the extraction" with package-lock.json (CI installs from it); then open a new Claude Code session in the repository (trust the folder when asked) and say «склади план»');
 }
 
+// What the plugin owns in a Workbench (overwritten by `update`); any other template file is only added when missing.
+const OWNED = [/^tools\//, /^\.claude\/skills\//, /^\.claude\/settings\.json$/, /^\.storybook\//, /^eslint\.config\.js$/, /^\.stylelintrc\.json$/, /^vite\.config\.ts$/, /^vitest\.config\.ts$/, /^tsconfig\.json$/, /^\.github\/workflows\/ci\.yml$/, /^PROMPT_(plan|build)\.md$/, /^src\/foundations\/TokenTable\./];
+const SIDE_BY_SIDE = ['AGENTS.md', 'FRONTEND.md']; // the designer's rules live here: the template's version goes next to them
+
+function update(dir) {
+  const TPL = join(ROOT, 'templates', 'workbench');
+  if (!existsSync(join(dir, 'tools', 'gates.mjs'))) { console.error(`refused: ${dir} is not a Workbench (no tools/gates.mjs) — new ones are made with scaffold.mjs workbench`); process.exit(2); }
+  const st = spawnSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' });
+  if (st.status === 0 && st.stdout.trim()) { console.error('refused: the git tree has uncommitted changes — commit them first, so the update is one reviewable diff'); process.exit(2); }
+  const vf = join(dir, '.workbench-version');
+  const from = existsSync(vf) ? readFileSync(vf, 'utf8').trim() : 'unknown (before .workbench-version)';
+  const overwritten = []; const added = []; const side = [];
+  const walk = (rel = '') => {
+    for (const e of readdirSync(join(TPL, rel), { withFileTypes: true })) {
+      const r = join(rel, e.name);
+      if (e.isDirectory()) { walk(r); continue; }
+      if (r === '.gitignore.workbench' || r === 'package.json') continue;
+      if (r === 'README.md' && existsSync(join(dir, 'WORKBENCH.md'))) continue; // the repository's own README sits at README.md
+      const content = readFileSync(join(TPL, r));
+      const target = join(dir, r);
+      if (!existsSync(target)) { mkdirSync(dirname(target), { recursive: true }); writeFileSync(target, content); added.push(r); continue; }
+      if (SIDE_BY_SIDE.includes(r)) {
+        if (!readFileSync(target).equals(content)) { const t = r.replace(/\.md$/, '.template.md'); writeFileSync(join(dir, t), content); side.push(t); }
+        continue;
+      }
+      if (OWNED.some((re) => re.test(r)) && !readFileSync(target).equals(content)) { writeFileSync(target, content); overwritten.push(r); }
+    }
+  };
+  walk();
+  // package.json: add what is missing, update a script the template also has, never remove the designer's own
+  const pkgPath = join(dir, 'package.json');
+  const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : {};
+  const tpl = JSON.parse(readFileSync(join(TPL, 'package.json'), 'utf8'));
+  const changes = [];
+  for (const key of ['scripts', 'dependencies', 'devDependencies']) {
+    for (const [k, v] of Object.entries(tpl[key] ?? {})) {
+      pkg[key] ??= {};
+      if (!(k in pkg[key])) { pkg[key][k] = v; changes.push(`${key}.${k}: added`); }
+      else if (key === 'scripts' && pkg[key][k] !== v) { pkg[key][k] = v; changes.push(`scripts.${k}: updated`); }
+    }
+  }
+  const depsChanged = changes.some((c) => !c.startsWith('scripts.'));
+  if (changes.length) writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  writeFileSync(vf, `${VERSION}\n`);
+  const gen = spawnSync(process.execPath, ['tools/tokens-css.mjs'], { cwd: dir, stdio: 'inherit' });
+  if (gen.status !== 0) { console.error('tokens could not be regenerated (see above)'); process.exit(2); }
+  console.log(`${dir}: updated from ${from} to ${VERSION}`);
+  console.log(`overwritten ${overwritten.length}${overwritten.length ? `:\n  ${overwritten.join('\n  ')}` : ''}`);
+  console.log(`added ${added.length}${added.length ? `:\n  ${added.join('\n  ')}` : ''}`);
+  console.log(`package.json: ${changes.length ? `\n  ${changes.join('\n  ')}` : 'no changes'}`);
+  if (side.length) console.log(`${side.join(', ')} written next to yours: merge the new rules by hand (your own rules stay)`);
+  if (depsChanged) console.log('dependencies changed: npm install is needed');
+  console.log('next: npm install && npm run check; review the diff and commit it as one commit');
+}
+
 const dir = resolve(process.env.INIT_CWD || process.cwd(), dirArg);
 if (cmd === 'workbench') { workbench(dir); process.exit(0); }
+if (cmd === 'update') { update(dir); process.exit(0); }
 refuseNonAscii(dir);
 const manifest = join(dir, 'extraction', 'capture-manifest.json');
 if (existsSync(dir) && readdirSync(dir).some((f) => !EMPTY_REPO.has(f)) && !existsSync(manifest)) {
