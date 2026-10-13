@@ -34,7 +34,7 @@
 import { launch } from './lib/browser.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
 
 // ── properties we read. Fixed on purpose: a capture whose property list drifts
@@ -843,4 +843,6 @@ console.log(`  state samples ${states.length}: ${forced} responded to forced pse
 if (blockedWrites?.length) console.log(`  ${blockedSummary(blockedWrites)}`);
 const sockLine = blockedWrites ? socketSummary(blockedWrites) : null;
 if (sockLine) console.log(`  ${sockLine}`);
+const hostLine = platformSummary(blockedWrites);
+if (hostLine) console.log(`  ${hostLine}`);
 await browser.close();

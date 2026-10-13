@@ -29,6 +29,9 @@ export const REVEAL_ICON = /^(eye|eye-invisible|eye-off|eye-slash|eye-open)$/i;
 // the socket URL, --socket-reads) lets a socket that only reads connect through to the server; the messages the page sends
 // over it are counted in the array's `.socketMessages` (url -> n), and the summary reports them. Default-deny: a read the list misses shows up as a blocked request and
 // an empty widget, which is visible; a write the list misses would not be.
+// The paths a hosting platform's bot check posts to: they change no product data.
+export const PLATFORM_CHECK = /^\/(\.well-known\/vercel\/security\/|cdn-cgi\/challenge-platform\/)/;
+
 export async function blockWrites(context, reads, socketReads) {
   const blocked = [];
   const socketRe = socketReads ? new RegExp(socketReads) : null;
@@ -38,6 +41,9 @@ export async function blockWrites(context, reads, socketReads) {
     const req = route.request();
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method())) return route.continue();
     if (readRe && readRe.test(new URL(req.url()).pathname)) return route.continue();
+    // the hosting platform's browser check (Vercel's challenge, Cloudflare's) posts to the platform, not the product:
+    // blocked, the page stays a blank challenge (found on the pilot's Vercel prototype after repeated runs)
+    if (PLATFORM_CHECK.test(new URL(req.url()).pathname)) { blocked.platformChecks = (blocked.platformChecks || 0) + 1; return route.continue(); }
     blocked.push({ method: req.method(), url: req.url().replace(/[?#].*$/, '') });
     return route.abort('blockedbyclient');
   });
@@ -75,4 +81,10 @@ export function socketSummary(...lists) {
   const total = new Map();
   for (const l of lists.filter(Boolean)) for (const [u, n] of l.socketMessages || []) total.set(u, (total.get(u) || 0) + n);
   return total.size ? [...total].map(([u, n]) => `socket messages let through: ${n} on ${u}`).join('; ') : null;
+}
+
+// The line for the hosting platform's bot checks let through; null when there were none.
+export function platformSummary(...lists) {
+  const n = lists.filter(Boolean).reduce((k, l) => k + (l.platformChecks || 0), 0);
+  return n ? `hosting checks let through: ${n} (the platform's bot check, Vercel / Cloudflare: it changes no product data; a page that stays a challenge means the platform refused the browser — tell the designer)` : null;
 }

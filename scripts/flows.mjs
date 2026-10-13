@@ -44,7 +44,7 @@ import { launch } from './lib/browser.mjs';
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary } from './lib/safety.mjs';
 import { restoreSession } from './lib/session.mjs';
 
 const args = process.argv.slice(2);
@@ -364,4 +364,6 @@ writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
 const sockLine = blockedLists ? socketSummary(...blockedLists) : null;
 if (sockLine) console.log(`  ${sockLine}`);
+const hostLine = platformSummary(...(blockedLists || []));
+if (hostLine) console.log(`  ${hostLine}`);
 console.log(`flows -> flows/flows.json: ${merged.length} screens, ${T.length} controls pressed (${T.filter((t) => t.effect.kind === 'navigate').length} navigate, ${T.filter((t) => t.effect.kind === 'open').length} open, ${T.filter((t) => t.effect.kind === 'change').length} change, ${T.filter((t) => t.effect.kind === 'none').length} did nothing), ${merged.reduce((n, s) => n + (s.refused?.length || 0), 0)} refused as unsafe`);
