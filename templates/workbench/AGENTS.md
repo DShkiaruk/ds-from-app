@@ -15,7 +15,7 @@ Layers, imports only downward: `src/screens` → `src/components` → `src/token
 ## Rules
 1. Styles use tokens only: `var(--…)` from src/tokens. They are listed in the generated src/tokens/*.css (each line says how the value was obtained) and in Storybook → Foundations; DESIGN.md is the snapshot taken when the Workbench was made. Why: one literal and the design drifts from the app; gate 2 fails.
 2. A value is missing → write `NEEDS-TOKEN: <what, where>` in plan/progress.md and ask the designer; never invent or approximate. Why: the set is closed.
-3. Never edit src/tokens/* or src/foundations/Foundations.stories.tsx; they are generated (`npm run tokens`). Why: gate 7 fails, and the next extraction overwrites the edit.
+3. Never edit src/tokens/*, src/foundations/Foundations.stories.tsx or src/foundations/Overview.mdx; they are generated (`npm run tokens`). Why: gate 7 fails, and the next extraction overwrites the edit.
 4. A new value the designer approves goes into extraction/canon/decided.tokens.json — `{"<name>": {"$type": "color", "$value": "#…", "role": "<color|spacing|fontSize|lineHeight|letterSpacing|fontWeight|fontFamily|radius|shadow|borderWidth>", "$provenance": {"label": "decided", "evidence": "<who>, <YYYY-MM-DD>: <why>"}}}` — then `npm run tokens`. Why: every value says how it was obtained; gate 7 refuses an undated or overriding one.
 5. A component lives in src/components/<Name>/ as <Name>.tsx, <Name>.module.css, <Name>.stories.tsx, index.ts. Why: Storybook is the review surface; gate 5 fails without the story.
 6. A component one screen uses lives in src/screens/<screen>/; it moves to src/components when a second screen needs it. Why: shared code changes need their own review.
