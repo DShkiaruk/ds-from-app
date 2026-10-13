@@ -96,7 +96,7 @@ test('compare.html (I1): a skipped screen gets its own heading, never "matches" 
 });
 
 test('compare.html (G3): a screen with a prototype-only top band says so under the app\'s picture, in uk and en; others do not', () => {
-  for (const [lang, want] of [['uk', 'Смуга прототипу вгорі (52 px) лишилась на знімку застосунку; у прототипі її немає — так і має бути.'], ['en', "The prototype bar at the top (52 px) is in the app's picture; the prototype leaves it out on purpose."]]) {
+  for (const [lang, want] of [['uk', 'обрізано: смуга лише для прототипу (52 px угорі)'], ['en', 'cropped: the prototype-only band (52 px at the top)']]) {
     const repo = mkdtempSync(join(tmpdir(), 'dsfa-compare-'));
     try {
       mkdirSync(join(repo, 'extraction', 'flows'), { recursive: true });
@@ -105,9 +105,32 @@ test('compare.html (G3): a screen with a prototype-only top band says so under t
       execFileSync('node', [join(ROOT, 'templates', 'workbench', 'tools', 'compare.mjs')], { cwd: repo });
       const html = readFileSync(join(repo, 'extraction', 'compare.html'), 'utf8');
       const [banded, plain] = html.split('<section>').slice(1);
-      assert.ok(banded.includes(`<img src="baseline/b--1440x900--light.png" alt=""><p class="band">${want.replace("'", '&#39;')}</p>`) || banded.includes(`<p class="band">${want}</p>`), banded);
+      assert.ok(banded.includes(`<p class="band">${want}</p>`), banded);
+      assert.ok(banded.includes('<div class="crop"><img src="baseline/b--1440x900--light.png" alt="" style="width:100%;margin:-3.611% 0 0 0%"></div>'), banded);
       assert.ok(banded.indexOf('class="band"') < banded.indexOf('<figcaption>Prototype') || banded.indexOf('class="band"') < banded.indexOf('<figcaption>Прототип'), 'under the app picture, before the prototype figure');
       assert.ok(!plain.includes('class="band"'));
     } finally { rmSync(repo, { recursive: true, force: true }); }
   }
+});
+
+test('compare.html: the app\'s picture is cropped by the band found in its capture (top and left), with a line under it', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'dsfa-compare-'));
+  try {
+    mkdirSync(join(repo, 'extraction', 'flows'), { recursive: true });
+    mkdirSync(join(repo, 'extraction', 'baseline'), { recursive: true });
+    writeFileSync(join(repo, 'extraction', 'decisions.json'), JSON.stringify({ lang: 'en', excluded: [
+      { id: 'side', include: false, texts: ['Persona A', 'Persona B'] }, { id: 'bar', include: false, texts: ['Admin', 'User'] }, { id: 'kept', include: true, texts: ['Policies'] }] }));
+    const el = (tag, text, path, x, y, w, h) => ({ tag, text, path, rect: { x, y, w, h } });
+    writeFileSync(join(repo, 'extraction', 'baseline', 'both--1440x900--light.json'), JSON.stringify({ meta: { viewport: { width: 1440, height: 900 } }, elements: [
+      el('aside', '', 'div#root>aside', 0, 0, 200, 900), el('button', 'Persona A', 'div#root>aside>button:nth-of-type(1)', 10, 100, 150, 30), el('button', 'Persona B', 'div#root>aside>button:nth-of-type(2)', 10, 140, 150, 30),
+      el('header', '', 'div#root>header', 0, 0, 1440, 50), el('button', 'Admin', 'div#root>header>button:nth-of-type(1)', 1200, 10, 40, 20), el('button', 'User', 'div#root>header>button:nth-of-type(2)', 1250, 10, 40, 20),
+      el('h1', 'Policies', 'div#root>main>h1', 260, 80, 200, 30)] }));
+    writeFileSync(join(repo, 'extraction', 'baseline', 'both--1440x900--light.png'), '');
+    writeFileSync(join(repo, 'extraction', 'flows', 'parity.json'), JSON.stringify({ screens: [{ ...base, name: 'both', leftOut: { elements: 4, controls: 0 } }] }));
+    execFileSync('node', [join(ROOT, 'templates', 'workbench', 'tools', 'compare.mjs')], { cwd: repo });
+    const html = readFileSync(join(repo, 'extraction', 'compare.html'), 'utf8');
+    // 1440 / (1440 - 200) = 116.129% wide; the shifts are 50 / 1240 and 200 / 1240 of the box's width
+    assert.ok(html.includes('<div class="crop"><img src="baseline/both--1440x900--light.png" alt="" style="width:116.129%;margin:-4.032% 0 0 -16.129%"></div>'), html);
+    assert.ok(html.includes('<p class="band">cropped: the prototype-only band (50 px at the top and 200 px at the left)</p>'), html);
+  } finally { rmSync(repo, { recursive: true, force: true }); }
 });
