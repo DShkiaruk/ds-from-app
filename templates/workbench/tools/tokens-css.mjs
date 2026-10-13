@@ -123,6 +123,8 @@ export function generate({ root = process.cwd() } = {}) {
     const t = T[k], x = t.$extensions?.[EXT] ?? {};
     const first = rows.find((r) => r.name === nameOf(k));
     if (first) { problems.push(`two tokens are both named --${nameOf(k)}: ${first.key}, ${k}`); continue; }
+    // a '.' or a space is not a CSS name character: the browser drops `--text-12.5px: …` and every var() of it
+    if (!/^[A-Za-z0-9_-]+$/.test(nameOf(k))) { problems.push(`--${nameOf(k)} is not a valid CSS custom property name (only letters, digits, - and _): rename it in extraction/decisions.json`); continue; }
     const group = GROUP_OF[x.role] ?? 'other';
     const renamedFrom = rename.has(k) ? k : undefined;
     const label = t.$provenance?.label ?? 'unknown';

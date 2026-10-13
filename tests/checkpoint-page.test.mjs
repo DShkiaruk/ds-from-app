@@ -327,7 +327,7 @@ const FRACTIONAL = [
   { id: 'text-13.5px', name: 'text-13.5px', value: '13.5px', group: 'typography', label: 'measured', nameStatus: 'proposed', evidence: 'x' },
 ];
 
-test('names the tool itself proposed pass untouched; only a changed name meets the pattern', async () => {
+test('a proposed name passes untouched only when it is a valid CSS name: a dot must be renamed before Done (the 2nd cold run\'s text-12.5px)', async () => {
   const { repo, spec } = repoWithCheckpoint(FRACTIONAL);
   const port = await freePort();
   const browser = await launch();
@@ -337,9 +337,14 @@ test('names the tool itself proposed pass untouched; only a changed name meets t
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(`http://localhost:${port}/`);
     const done = page.locator('#done');
-    assert.equal(await done.isDisabled(), false, 'untouched proposed names with a dot or underscore leave Done enabled');
-    assert.equal(await page.locator('[data-kind="tokens"] .err:not([hidden])').count(), 0, 'no message');
+    assert.equal(await done.isDisabled(), true, 'the proposed text-13.5px is not a CSS name: Done waits');
+    assert.equal(await page.locator('[data-kind="tokens"][data-id="text-13.5px"] .err:not([hidden])').count(), 1, 'the row says so');
+    assert.equal(await page.locator('[data-kind="tokens"][data-id="lit-leading-37_71"] .err:not([hidden])').count(), 0, 'an underscore is fine');
+    const dotted = page.locator('[data-kind="tokens"][data-id="text-13.5px"] input[type=text]');
+    await tripleClick(page, dotted);
+    await page.keyboard.type('text-13-5px');
     const input = page.locator('[data-kind="tokens"][data-id="lit-leading-37_71"] input[type=text]');
+    assert.equal(await done.isDisabled(), false, 'renamed: Done is enabled');
     await tripleClick(page, input);
     await page.keyboard.type('Leading Big');
     assert.equal(await done.isDisabled(), true, 'a changed name must meet the pattern');
@@ -351,11 +356,11 @@ test('names the tool itself proposed pass untouched; only a changed name meets t
     assert.equal(r.code, 0, r.err);
     const d = JSON.parse(readFileSync(join(spec, 'decisions.json'), 'utf8'));
     assert.equal(d.tokens.find((t) => t.id === 'lit-leading-37_71').name, 'lit-leading-37_71');
-    assert.equal(d.tokens.find((t) => t.id === 'text-13.5px').name, 'text-13.5px');
+    assert.equal(d.tokens.find((t) => t.id === 'text-13.5px').name, 'text-13-5px');
   } finally { killAll(); await browser.close(); rmSync(repo, { recursive: true, force: true }); }
 });
 
-test('/save: an untouched proposed name is 200, a changed one is checked, a null element is 400 and the server stays up', async () => {
+test('/save: an untouched valid proposed name is 200, a dotted one 400, a changed one is checked, a null element is 400 and the server stays up', async () => {
   const { repo } = repoWithCheckpoint(FRACTIONAL);
   const port = await freePort();
   const s = startServe(repo, port);
@@ -367,7 +372,8 @@ test('/save: an untouched proposed name is 200, a changed one is checked, a null
     assert.equal((await post({ ...base, tokens: [null] })).status, 400, 'a null element');
     assert.equal((await fetch(`${url}/`)).status, 200, 'the server is still up');
     assert.equal((await post({ ...base, tokens: [{ id: 'lit-leading-37_71', name: 'Leading Big' }] })).status, 400, 'a changed name must match');
-    assert.equal((await post({ ...base, tokens: [{ id: 'text-13.5px', name: 'text-13.5px' }] })).status, 200, 'the untouched proposed name');
+    assert.equal((await post({ ...base, tokens: [{ id: 'text-13.5px', name: 'text-13.5px' }] })).status, 400, 'an untouched proposed name that is not a CSS name');
+    assert.equal((await post({ ...base, tokens: [{ id: 'lit-leading-37_71', name: 'lit-leading-37_71' }, { id: 'text-13.5px', name: 'text-13-5px' }] })).status, 200, 'the untouched valid one, and the renamed one');
     await s.exited;
   } finally { killAll(); rmSync(repo, { recursive: true, force: true }); }
 });

@@ -279,7 +279,8 @@ const validate = () => {
     for (const r of rows) {
       const inp = r.querySelector('input[type=text]');
       if (!inp) continue;
-      const invalid = (inp.value !== r.dataset.id && !re.test(inp.value)) || (counted(r) && names.filter((n) => n === inp.value).length > 1);
+      // a token name must be a valid CSS name even when the tool proposed it (a dot makes the browser drop --text-12.5px)
+      const invalid = (inp.value !== r.dataset.id && !re.test(inp.value)) || (kind === 'tokens' && !/^[A-Za-z0-9_-]+$/.test(inp.value)) || (counted(r) && names.filter((n) => n === inp.value).length > 1);
       const m = document.getElementById(inp.getAttribute('aria-describedby'));
       inp.setAttribute('aria-invalid', String(invalid));
       if (m) { m.hidden = !invalid; m.textContent = invalid ? msg : ''; }
@@ -363,8 +364,10 @@ function serve() {
         const finalOf = (k) => (inv[k] ?? []).map((item) => { const x = (d[k] ?? []).find((y) => y.id === item.id) ?? {}; return { item, x, name: x.name ?? item.name, include: x.include ?? item.include }; });
         const bad = (k, re, counted) => {
           const rows = finalOf(k);
-          // the pattern binds a name the designer changed; a name the tool itself proposed (lit-leading-37_71, text-13.5px) passes untouched
+          // the pattern binds a name the designer changed; a name the tool itself proposed (lit-leading-37_71) passes untouched —
+          // but only a valid CSS name: a '.' or a space makes `--name` a declaration the browser drops (the 2nd cold run's text-12.5px)
           if (rows.some((r) => r.x.name !== undefined && (typeof r.x.name !== 'string' || (r.x.name !== r.item.id && !re.test(r.x.name))))) return true;
+          if (k === 'tokens' && rows.some((r) => typeof r.name !== 'string' || !/^[A-Za-z0-9_-]+$/.test(r.name))) return true;
           const names = rows.filter(counted).map((r) => r.name);
           return new Set(names).size !== names.length;
         };

@@ -505,3 +505,13 @@ test('Foundations: Overview carries the product and date; stories have no args a
     assert.equal(checkIn(dir).status, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('a token name with a dot is reported, not written (the browser drops `--text-12.5px: …` and every var() of it)', () => {
+  const t = { ...TOKENS, 'text-12.5px': tok('dimension', 12.5, { cssVar: '--text-12.5px', role: 'fontSize', css: '12.5px' }, M('--text-12.5px')) };
+  const dir = repo(t);
+  try {
+    const r = gen(dir);
+    assert.match(r.stderr, /--text-12\.5px is not a valid CSS custom property name/);
+    assert.ok(!Object.values(snapshot(dir)).join('\n').includes('--text-12.5px:'), 'the invalid name is not written');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

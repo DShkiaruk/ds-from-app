@@ -348,9 +348,10 @@ const oneOffs = {};
   if (need.radius) keep(byKind('radius').sort((a, b) => a.value - b.value), 'radius').forEach((c, i) => add(`radius-${i + 1}`, 'radius', c.value, c, `${c.value}px`, String(i + 1), `a corner radius the product sets (${c.value}px)`));
   if (need.spacing) keep(byKind('spacing').sort((a, b) => a.value - b.value), 'spacing').forEach((c) => add(`spacing-${String(c.value).replace('.', '_')}px`, 'spacing', c.value, c, `${c.value}px`, `${c.value}px`, `a padding or gap the product sets (${c.value}px)`));
   if (need.fontSize) keep(byKind('fontSize').sort((a, b) => a.value - b.value), 'fontSize').forEach((c) => {
-    add(`text-${c.value}px`, 'fontSize', c.value, c, `${c.value}px`, `${c.value}px`, `a font size the product sets (${c.value}px)`);
+    // a '.' is not a CSS name character (`--text-12.5px` is dropped by the browser): 12.5 → 12_5, as spacing and lit-* do
+    add(`text-${String(c.value).replace('.', '_')}px`, 'fontSize', c.value, c, `${c.value}px`, `${c.value}px`, `a font size the product sets (${c.value}px)`);
     const lh = byKind(`lineHeight@${c.value}`).sort((a, b) => b.nodes - a.nodes)[0];
-    if (lh) add(`text-${c.value}px--line-height`, 'lineHeight', lh.value, lh, `${lh.value}px`, `${c.value}px--line-height`, `the line height the product sets most at ${c.value}px (${lh.value}px)`);
+    if (lh) add(`text-${String(c.value).replace('.', '_')}px--line-height`, 'lineHeight', lh.value, lh, `${lh.value}px`, `${c.value}px--line-height`, `the line height the product sets most at ${c.value}px (${lh.value}px)`);
   });
   if (need.fontWeight) keep(byKind('fontWeight').sort((a, b) => a.value - b.value), 'fontWeight').forEach((c) => add(`font-weight-${c.value}`, 'fontWeight', c.value, c, String(c.value), String(c.value), `a font weight the product sets (${c.value})`));
   if (need.fontFamily) keep(byKind('fontFamily').sort((a, b) => b.nodes - a.nodes), 'fontFamily').slice(0, 4).forEach((c, i) => add(i === 0 ? 'font-sans' : `font-${i + 1}`, 'fontFamily', c.value, c, c.value, i === 0 ? 'sans' : String(i + 1), `the ${i === 0 ? 'most used' : `number ${i + 1}`} font family`));
