@@ -4,7 +4,10 @@ export const HARNESS_WIDTHS = [320, 375, 768, 1024, 1440, 1920];
 export const BUDGET = { cls: 0.1, lcpMs: 2500, imageBytes: 1_000_000 };
 
 // An <a href> of a screen: where does it go? {kind:'screen'|'external'|'anchor'|'bad', why?}
-export function classifyLink(href, base, screens, routes = {}, hasId = () => false) {
+// appPages: the app's pages that are not built here (extraction/flows/flows.json): a flow screen not built yet, or a page of
+// the app outside the flow. A link to one is a note, not a broken link: mid-flow (check:task) the next screen is not
+// built yet, and the app's own menu links to pages the test flow does not rebuild.
+export function classifyLink(href, base, screens, routes = {}, hasId = () => false, appPages = new Map()) {
   const raw = String(href ?? '').trim();
   if (!raw) return { kind: 'bad', why: 'empty href' };
   if (/^(mailto|tel|sms):/i.test(raw)) return { kind: 'external' };
@@ -20,7 +23,9 @@ export function classifyLink(href, base, screens, routes = {}, hasId = () => fal
   if (/^#\/?/.test(hash) && (hash.startsWith('#/') || hash === '#')) {
     const id = decodeURIComponent(hash.replace(/^#\/?/, '').split('?')[0]);
     if (!id) return { kind: 'bad', why: 'goes to the screen index' };
-    return known.has(id) ? { kind: 'screen', id } : { kind: 'bad', why: `no screen "${id}"` };
+    if (known.has(id)) return { kind: 'screen', id };
+    if (appPages.has(id)) return { kind: 'elsewhere', id, why: appPages.get(id) };
+    return { kind: 'bad', why: `no screen "${id}"` };
   }
   if (hash.length > 1) return hasId(decodeURIComponent(hash.slice(1))) ? { kind: 'anchor' } : { kind: 'bad', why: `no element with id "${hash.slice(1)}"` };
   return { kind: 'bad', why: 'goes to the screen index' };

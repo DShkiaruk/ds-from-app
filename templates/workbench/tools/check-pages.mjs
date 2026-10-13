@@ -33,6 +33,17 @@ const readJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } ca
 const baseDir = join(process.cwd(), 'extraction', 'baseline');
 const captured = existsSync(baseDir) ? readdirSync(baseDir).filter((f) => f.endsWith('.json')).map((f) => readJson(join(baseDir, f))?.meta?.viewport?.width) : [];
 const routes = readJson(join(process.cwd(), 'extraction', 'flows', 'routes.json')) ?? {};
+// the app's pages this Workbench does not build: flow screens not built yet, and the app's other pages (by name and by the
+// last part of their path, as a #/<name> route would name them)
+const flowsDoc = readJson(join(process.cwd(), 'extraction', 'flows', 'flows.json')) ?? {};
+const appPages = new Map();
+const lastSeg = (p) => decodeURIComponent(String(p ?? '').split(/[?#]/)[0].replace(/\/+$/, '').split('/').pop() || '');
+for (const sc of flowsDoc.screens ?? []) {
+  if (sc.name) appPages.set(sc.name, 'a flow screen not built yet');
+  for (const t of sc.transitions ?? []) if (t.effect?.to) { const k = lastSeg(t.effect.to); if (k && !appPages.has(k)) appPages.set(k, 'a page of the app outside the flow'); }
+}
+for (const h of flowsDoc.uncapturedLandmarks ?? []) { const k = String(h).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, ''); if (k && !appPages.has(k)) appPages.set(k, 'a page of the app outside the flow'); }
+for (const u of flowsDoc.uncaptured ?? flowsDoc.reachableNotCaptured ?? []) { const k = lastSeg(typeof u === 'string' ? u : u?.path ?? u?.url); if (k && !appPages.has(k)) appPages.set(k, 'a page of the app outside the flow'); }
 const { cap, other } = widthPlan(captured.filter((w) => typeof w === 'number'));
 const HEIGHT = 900;
 
@@ -73,8 +84,9 @@ try {
     bad.push(...perfProblems(d));
     const ids = new Set(d.ids);
     for (const h of d.hrefs) {
-      const c = classifyLink(h, BASE, screens, routes, (id) => ids.has(id));
+      const c = classifyLink(h, BASE, screens, routes, (id) => ids.has(id), appPages);
       if (c.kind === 'bad') bad.push(`link ${h}: ${c.why}`);
+      else if (c.kind === 'elsewhere') notes.push(`link ${h}: ${c.why}`);
       else if (c.kind === 'external') external.add(h);
     }
     for (const w of [...cap, ...other]) {

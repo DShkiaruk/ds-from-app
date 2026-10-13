@@ -358,6 +358,11 @@ test('check-pages model: links resolve to screens, not to the index, a server pa
   assert.equal(c('#sec', ['sec']).kind, 'anchor');
   assert.match(c('#sec').why, /no element/);
   assert.equal(PM.classifyLink('#/orders-list', B, ['orders'], { orders: '#/orders-list' }).kind, 'screen');
+  // a flow screen not built yet (mid-flow, check:task) and a page of the app outside the flow are notes, not broken links
+  const app = new Map([['billing', 'a flow screen not built yet'], ['scans', 'a page of the app outside the flow']]);
+  assert.deepEqual(PM.classifyLink('#/billing', B, ['home'], {}, () => false, app), { kind: 'elsewhere', id: 'billing', why: 'a flow screen not built yet' });
+  assert.equal(PM.classifyLink('#/scans', B, ['home'], {}, () => false, app).kind, 'elsewhere');
+  assert.equal(PM.classifyLink('#/nowhere', B, ['home'], {}, () => false, app).kind, 'bad', 'a route the app does not have is still broken');
 });
 
 test('check-pages model: budgets, basics and which widths fail', () => {
