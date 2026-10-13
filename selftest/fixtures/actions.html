@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- A synthetic product for the flows self-test: clickable rows that are not controls (a delegated handler), one of them
+     a "Delete" whose handler POSTs; a group of 50 rows; a "More actions" menu whose "Delete record" item POSTs. -->
+<html lang="en"><head><meta charset="utf-8"><title>Actions fixture</title>
+<style>body { font: 14px/20px system-ui, sans-serif; } main { padding: 24px; } .rec, .danger, .bulk { cursor: pointer; padding: 4px 0; } [role=menu] { border: 1px solid #ccc; padding: 8px; width: 200px; }</style></head>
+<body><main>
+<h1>Records</h1>
+<p id="status">Ready</p>
+<button type="button" id="more" aria-haspopup="menu" aria-expanded="false">More actions</button>
+<div role="menu" id="menu" hidden>
+  <button type="button" role="menuitem" id="rename">Rename</button>
+  <button type="button" role="menuitem" id="del">Delete record</button>
+</div>
+<div id="list">
+  <div class="rec" data-id="1">Record Alpha</div>
+  <div class="danger" data-id="2">Delete record</div>
+</div>
+<div id="bulk"></div>
+</main>
+<script>
+  const bulk = document.getElementById('bulk');
+  for (let i = 1; i <= 50; i++) { const d = document.createElement('div'); d.className = 'bulk'; d.textContent = 'Item ' + i; bulk.append(d); }
+  bulk.addEventListener('click', (e) => { const r = e.target.closest('.bulk'); if (r) document.getElementById('status').textContent = r.textContent + ' selected'; });
+  document.getElementById('list').addEventListener('click', (e) => {
+    const r = e.target.closest('.rec, .danger'); if (!r) return;
+    if (r.classList.contains('danger')) { fetch('/actions/api/delete', { method: 'POST' }); return; }
+    document.querySelector('main').innerHTML = '<h1>Alpha detail</h1><p>Fields of record Alpha</p>';
+  });
+  document.getElementById('more').onclick = () => { document.getElementById('menu').hidden = false; document.getElementById('more').setAttribute('aria-expanded', 'true'); };
+  document.getElementById('rename').onclick = () => { document.getElementById('status').textContent = 'Renamed'; document.getElementById('menu').hidden = true; };
+  document.getElementById('del').onclick = () => { fetch('/actions/api/delete', { method: 'POST' }); };
+</script></body></html>

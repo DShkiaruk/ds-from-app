@@ -38,9 +38,10 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
 1. Capture the entry screen.
 2. `node flows.mjs <repo> [--storage …]` — run it **in the background** and wait for it to exit: it presses every safe
    control in a fresh page and can take many minutes (split it with `--only <screen>`). It lists screens it reached
-   that no capture holds (`reachable but not captured`). It also lists clickable elements that are not controls (a
-   table row that opens a record). It does not press them: tell the designer, and capture one with
-   `--click '<selector>' --as-screen` if they want that screen.
+   that no capture holds (`reachable but not captured`). It also presses clickable rows that are not controls (a table
+   row that opens a record), one per group of similar rows, and the controls inside a menu or dialog a press opens
+   (one level); refused ones are listed, not pressed. A record view it reaches at the same address is reported by its
+   heading: capture it with `--click '<selector of the row>' --as-screen`.
 3. Capture those and run `flows.mjs` again. Stop when it names nothing new, or the designer says the rest is out of
    scope; write what was left out into your report.
 
@@ -54,6 +55,10 @@ Management") is refused; `--allow '<its exact name>'` lets it through only after
 navigates. When the first screen is itself a menu item, capture it with that menu click too
 (`--click … --as-screen --screen <name>`), so flows.mjs knows it by its landmark; a plain capture of the address is then
 not needed.
+
+When `flows.mjs` prints `tab panels no capture holds`, capture each tab panel the flow needs with the command it
+suggests (`--click '<the tab>' --screen <screen>--<tab>`); the build uses those captures instead of leaving the panel
+empty with NEEDS-STATE.
 
 ## Dark theme
 `tokens.mjs` says when a dark theme is declared but not captured. Capture with `--scheme dark`; for a theme switched by
