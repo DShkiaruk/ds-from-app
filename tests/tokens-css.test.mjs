@@ -397,3 +397,111 @@ test('R28.8: a decided token that is neither a colour nor a shadow needs a role 
     assert.equal(gen(dir).stderr.includes('needs a role'), false, 'a colour needs none');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// ---- Foundations that read like a design system's: colours by what they paint, text styles from the captures, Overview, no noise
+
+const col = (name, props, value = '#123456') => tok('color', value, { cssVar: `--${name}`, role: 'color', css: value, usage: { rules: 9, props } }, M(`--${name}`));
+const rowOf = (dir, name) => JSON.parse(rd(dir, 'src/tokens/tokens.json')).tokens.find((t) => t.name === name);
+
+test('Foundations: a colour goes to the group of what it paints most, the rest listed as "also"', () => {
+  const dir = repo({
+    'bg-main': col('bg-main', { background: 16, 'border-color': 4, color: 1 }, '#ffffff'),
+    ink: col('ink', { color: 40, 'text-decoration-color': 2, 'box-shadow': 3 }, '#111111'),
+    line: col('line', { border: 30, 'border-bottom': 20, background: 4 }, '#dddddd'),
+    mark: col('mark', { fill: 6, stroke: 2 }, '#ff0000'),
+    idle: col('idle', undefined, '#00ff00'),
+    lit: tok('color', '#B795F7', { cssVar: '--lit', role: 'color', css: '#B795F7' }, { label: 'derived', evidence: 'a literal the product paints OUTSIDE its own token set: color #B795F7 on 12 element(s) across 2 screen(s) (as hover background, border); nearest product token ink', counters: { nodes: 12 } }),
+  }, false);
+  try {
+    assert.equal(gen(dir).status, 0);
+    assert.equal(rowOf(dir, 'bg-main').paint, 'background');
+    assert.deepEqual(rowOf(dir, 'bg-main').also, ['border ×4', 'text ×1']);
+    assert.equal(rowOf(dir, 'ink').paint, 'text');
+    assert.ok(rowOf(dir, 'ink').also.includes('box-shadow ×3'));
+    assert.equal(rowOf(dir, 'line').paint, 'border');
+    assert.deepEqual(rowOf(dir, 'line').also, ['background ×4']);
+    assert.equal(rowOf(dir, 'mark').paint, 'icon');
+    assert.equal(rowOf(dir, 'idle').paint, 'other');
+    assert.equal(rowOf(dir, 'lit').paint, 'background', 'a derived colour with no counts: first role named in its evidence');
+    assert.equal(checkIn(dir).status, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+const el = (text, v, path = 'div#root>main>h1') => ({ path, tag: 'span', text, interactive: false, values: { fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: '400', lineHeight: '20px', letterSpacing: 'normal', ...v } });
+const capture = (dir, name, elements, scheme = 'light') => {
+  mkdirSync(join(dir, 'extraction', 'baseline'), { recursive: true });
+  writeFileSync(join(dir, 'extraction', 'baseline', `${name}--1440x900--${scheme}.json`), JSON.stringify({ meta: { screen: name, colorScheme: scheme }, elements }));
+};
+const typeTokens = {
+  'text-sm': tok('dimension', 14, { cssVar: '--text-sm', role: 'fontSize', css: '14px' }, M('--text-sm')),
+  'text-xl': tok('dimension', 24, { cssVar: '--text-xl', role: 'fontSize', css: '24px' }, M('--text-xl')),
+  'text-sm--lh': tok('dimension', 20, { cssVar: '--text-sm--lh', role: 'lineHeight', css: '20px' }, M('--text-sm--lh')),
+  'fw-medium': tok('fontWeight', 500, { cssVar: '--fw-medium', role: 'fontWeight', css: '500' }, M('--fw-medium')),
+  'fw-normal': tok('fontWeight', 400, { cssVar: '--fw-normal', role: 'fontWeight', css: '400' }, M('--fw-normal')),
+  'font-body': tok('fontFamily', 'Inter, sans-serif', { cssVar: '--font-body', role: 'fontFamily', css: 'Inter, sans-serif' }, M('--font-body')),
+};
+
+test('Foundations: text styles from the light captures — one style per combination, uses counted, an interface text as the example, tokens mapped, "no token" marked', () => {
+  const dir = repo(typeTokens, false);
+  capture(dir, 'home', [
+    el('42 rows', {}, 'div#root>main>table>tbody>tr>td'),         // data: counted, never the example
+    el('Save changes', {}),
+    el('Cancel', {}),
+    el('Overview', { fontSize: '24px', fontWeight: '500', lineHeight: '33.6px' }),
+    el('', {}),                                                   // no own text: not a text style
+  ]);
+  capture(dir, 'home', [el('Dark only', { fontSize: '99px' })], 'dark');
+  try {
+    assert.equal(gen(dir).status, 0);
+    const s = JSON.parse(rd(dir, 'src/tokens/tokens.json')).textStyles;
+    assert.equal(s.length, 2, JSON.stringify(s));
+    const [body, head] = s;                                        // sorted by size, then weight
+    assert.deepEqual([body.size, body.weight, body.lineHeight, body.uses], [14, 400, 20, 3]);
+    assert.equal(body.example, 'Save changes');
+    assert.deepEqual(body.tokens, { fontFamily: '--font-body', fontSize: '--text-sm', fontWeight: '--fw-normal', lineHeight: '--text-sm--lh' });
+    assert.equal(body.letterSpacing, 'normal');
+    assert.deepEqual([head.size, head.weight, head.uses, head.example], [24, 500, 1, 'Overview']);
+    assert.equal(head.tokens.fontSize, '--text-xl');
+    assert.equal(head.tokens.lineHeight, null, '33.6px: no token holds it');
+    assert.ok(!s.some((x) => x.size === 99), 'dark captures are not read');
+    assert.equal(checkIn(dir).status, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Foundations: without captures there are no text styles; the flow\'s screens give the example first', () => {
+  const none = repo(typeTokens, false);
+  const two = repo(typeTokens, false);
+  capture(two, 'aaa-other', [el('Other screen', {})]);
+  capture(two, 'zzz-flow', [el('Flow screen', {})]);
+  mkdirSync(join(two, 'extraction', 'flows'), { recursive: true });
+  writeFileSync(join(two, 'extraction', 'flows', 'flows.json'), JSON.stringify({ screens: [{ name: 'zzz-flow' }] }));
+  try {
+    assert.equal(gen(none).status, 0);
+    assert.deepEqual(JSON.parse(rd(none, 'src/tokens/tokens.json')).textStyles, []);
+    assert.equal(gen(two).status, 0);
+    const s = JSON.parse(rd(two, 'src/tokens/tokens.json')).textStyles;
+    assert.equal(s[0].example, 'Flow screen');
+    assert.equal(s[0].uses, 2);
+  } finally { rmSync(none, { recursive: true, force: true }); rmSync(two, { recursive: true, force: true }); }
+});
+
+test('Foundations: Overview carries the product and date; stories have no args and no controls; existing tokens.json fields stay', () => {
+  const dir = repo();
+  writeFileSync(join(dir, 'extraction', 'capture-manifest.json'), JSON.stringify({ product: 'Fixture', createdAt: '2026-10-13' }));
+  try {
+    assert.equal(gen(dir).status, 0);
+    const mdx = rd(dir, 'src/foundations/Overview.mdx');
+    assert.match(mdx, /<Meta title="Foundations\/Overview" \/>/);
+    assert.match(mdx, /Fixture/);
+    assert.match(mdx, /2026-10-13/);
+    for (const w of ['measured', 'derived', 'decided', 'npm run tokens', 'Foundations', 'Components', 'Screens']) assert.ok(mdx.includes(w), w);
+    const stories = rd(dir, 'src/foundations/Foundations.stories.tsx');
+    assert.match(stories, /controls: \{ disable: true \}, actions: \{ disable: true \}/);
+    assert.doesNotMatch(stories, /args:/);
+    assert.doesNotMatch(stories, /group:/);
+    const j = JSON.parse(rd(dir, 'src/tokens/tokens.json'));
+    for (const f of ['key', 'name', 'cssVar', 'group', 'role', 'value', 'label', 'evidence']) assert.ok(f in j.tokens[0], f);
+    assert.ok(j.themes && j.product && Array.isArray(j.dropped));
+    assert.equal(checkIn(dir).status, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
