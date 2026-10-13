@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.5 — 2026-10-14
+
+- A Workbench made before 0.1.4 updates without a decision: its extraction still holds token names with a dot
+  (`text-12.5px`); the token layer writes them with `_` (`--text-12_5px`) and says so in a note, instead of failing the
+  token gate. Found when the 2nd cold run updated its Workbench with `scaffold.mjs update`.
+
 ## 0.1.4 — 2026-10-14
 
 - **The Workbench's CI checked on GitHub Actions** (a private repository with a synthetic Workbench, no client data).

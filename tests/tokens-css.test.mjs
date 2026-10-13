@@ -506,12 +506,15 @@ test('Foundations: Overview carries the product and date; stories have no args a
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a token name with a dot is reported, not written (the browser drops `--text-12.5px: …` and every var() of it)', () => {
+test('a token name with a dot (an extraction before 0.1.4) is written with _ and noted; a space is a problem', () => {
   const t = { ...TOKENS, 'text-12.5px': tok('dimension', 12.5, { cssVar: '--text-12.5px', role: 'fontSize', css: '12.5px' }, M('--text-12.5px')) };
   const dir = repo(t);
   try {
     const r = gen(dir);
-    assert.match(r.stderr, /--text-12\.5px is not a valid CSS custom property name/);
-    assert.ok(!Object.values(snapshot(dir)).join('\n').includes('--text-12.5px:'), 'the invalid name is not written');
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /note: --text-12\.5px is written as --text-12_5px: a dot is not a CSS name character/);
+    const all = Object.values(snapshot(dir)).join('\n');
+    assert.ok(all.includes('--text-12_5px:') && !all.includes('--text-12.5px:'), 'written with _');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+

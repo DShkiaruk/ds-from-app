@@ -82,7 +82,10 @@ export function generate({ root = process.cwd() } = {}) {
     const ref = aliasOf(T[key].$value);
     if (ref && !T[ref]) { problems.push(`${key} in decided.tokens.json points at {${ref}}, which is not a token`); delete T[key]; }
   }
-  const nameOf = (k) => rename.get(k) ?? String(T[k]?.$extensions?.[EXT]?.cssVar ?? `--${k}`).replace(/^--/, '');
+  // a '.' is not a CSS name character (the browser drops `--text-12.5px: …`): an extraction made before 0.1.4 proposed such
+  // names, so they are written with '_' (--text-12_5px) and said in a note, and an older Workbench updates without a decision
+  const rawName = (k) => rename.get(k) ?? String(T[k]?.$extensions?.[EXT]?.cssVar ?? `--${k}`).replace(/^--/, '');
+  const nameOf = (k) => rawName(k).replace(/\./g, '_');
   // the product's own variable name -> token key (references in authored css use the old names), and the current names
   const byOld = new Map(), byName = new Map();
   for (const k of Object.keys(T)) { byOld.set(String(T[k].$extensions?.[EXT]?.cssVar ?? `--${k}`).replace(/^--/, ''), k); byOld.set(k, byOld.get(k) ?? k); byName.set(nameOf(k), byName.get(nameOf(k)) ?? k); }
@@ -123,7 +126,8 @@ export function generate({ root = process.cwd() } = {}) {
     const t = T[k], x = t.$extensions?.[EXT] ?? {};
     const first = rows.find((r) => r.name === nameOf(k));
     if (first) { problems.push(`two tokens are both named --${nameOf(k)}: ${first.key}, ${k}`); continue; }
-    // a '.' or a space is not a CSS name character: the browser drops `--text-12.5px: …` and every var() of it
+    if (rawName(k) !== nameOf(k)) notes.push(`--${rawName(k)} is written as --${nameOf(k)}: a dot is not a CSS name character`);
+    // any other character outside a CSS name (a space) is a problem: the browser would drop the declaration
     if (!/^[A-Za-z0-9_-]+$/.test(nameOf(k))) { problems.push(`--${nameOf(k)} is not a valid CSS custom property name (only letters, digits, - and _): rename it in extraction/decisions.json`); continue; }
     const group = GROUP_OF[x.role] ?? 'other';
     const renamedFrom = rename.has(k) ? k : undefined;
