@@ -1,0 +1,12 @@
+.table { border-collapse: collapse; width: 100%; background: #fff; color: #16160f; font: 14px/1.4 system-ui, sans-serif; }
+.table th, .table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e4e3de; vertical-align: middle; }
+.table th { font-weight: 600; font-size: 12px; color: #4a4943; }
+.swatch { display: inline-block; width: 40px; height: 40px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); }
+.box { display: inline-block; width: 48px; height: 48px; background: #f6f6f4; border: 1px solid #c9c8c2; }
+.bar { display: inline-block; height: 12px; background: #4a4943; }
+.note { font-size: 12px; color: #4a4943; margin-top: 2px; }
+.badge, .measured, .derived, .decided { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.measured { background: #e3f3e9; color: #1a6b3c; }
+.derived { background: #e3ecf8; color: #1d4f91; }
+.decided { background: #e4e3de; color: #16160f; }
+.badge { background: #e4e3de; color: #16160f; }

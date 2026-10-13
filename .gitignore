@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+# sign-in sessions never enter any repository
+*.auth.json
+auth.json
+*.storage.json
+.env*

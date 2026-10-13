@@ -1,0 +1,37 @@
+{
+  "name": "__SLUG__-workbench",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build --quiet -o storybook-static",
+    "tokens": "node tools/tokens-css.mjs",
+    "lint": "eslint .",
+    "lint:css": "stylelint \"src/**/*.css\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:vars": "node tools/check-vars.mjs",
+    "check:inline": "node tools/check-inline.mjs",
+    "check:tokens": "node tools/check-tokens.mjs",
+    "check:stories": "node tools/check-stories.mjs",
+    "test:stories": "vitest --project=storybook --run",
+    "parity": "node tools/gates.mjs parity",
+    "compare": "node tools/compare.mjs",
+    "check:fast": "node tools/gates.mjs fast",
+    "check": "node tools/gates.mjs all",
+    "check:task": "node tools/gates.mjs task",
+    "check:ci": "node tools/gates.mjs ci"
+  },
+  "dependencies": { "react": "19.3.0", "react-dom": "19.3.0" },
+  "devDependencies": {
+    "@eslint/js": "9.39.5", "@storybook/addon-a11y": "10.6.2", "@storybook/addon-docs": "10.6.2", "@storybook/addon-vitest": "10.6.2",
+    "@storybook/react-vite": "10.6.2", "@types/react": "19.3.0", "@types/react-dom": "19.3.0", "@vitejs/plugin-react": "5.2.0",
+    "@vitest/browser-playwright": "4.1.11", "eslint": "9.39.5", "eslint-plugin-jsx-a11y": "6.10.2", "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0", "playwright": "1.62.1", "storybook": "10.6.2", "storybook-addon-pseudo-states": "10.6.2",
+    "stylelint": "16.26.1", "stylelint-declaration-strict-value": "1.12.1", "typescript": "5.9.3", "typescript-eslint": "8.71.2",
+    "vite": "7.3.7", "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "ds-from-app",
+  "owner": { "name": "Eleken" },
+  "plugins": [
+    { "name": "ds-from-app", "source": "./", "description": "Live app → design tokens → checkpoint → Workbench repo with a rebuilt test flow" }
+  ],
+  "description": "ds-from-app, local catalogue until it joins Eleken's design tools",
+  "metadata": { "description": "ds-from-app, local catalogue until it joins Eleken's design tools" }
+}

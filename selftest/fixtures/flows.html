@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- A synthetic two-screen product for the flows/parity self-test. ?variant=bad plants three defects in it:
+     a renamed column header, a dead "Filters" button, and a re-padded "Compact view" button. Nothing real. -->
+<html lang="en"><head><meta charset="utf-8"><title>Flows fixture</title>
+<style>
+  body { margin: 0; font: 14px/20px system-ui, sans-serif; color: #111; background: #fafafa; }
+  main { padding: 24px; } h1 { font-size: 24px; margin: 0 0 16px; }
+  .bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  button, a.btn { font: inherit; padding: 6px 12px; border: 1px solid #ddd; background: #fff; border-radius: 6px; color: #111; text-decoration: none; }
+  .bad-pad { padding: 6px 40px; }
+  table { border-collapse: collapse; } th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
+  .search { box-sizing: border-box; width: 406px; height: 40px; padding: 14px; border: 1px solid #ddd; margin-bottom: 16px; }
+  .search.wide-pad { padding: 14px 16px; }
+  .compact td { padding: 4px 12px; }
+  [role=dialog] { position: fixed; top: 80px; left: 80px; background: #fff; border: 1px solid #ccc; padding: 16px; }
+</style></head>
+<body><main id="app"></main>
+<script>
+  const bad = new URLSearchParams(location.search).get('variant') === 'bad';
+  const variant = new URLSearchParams(location.search).get('variant');
+  const q = location.search;
+  const app = document.getElementById('app');
+  if (location.pathname.startsWith('/detail')) {
+    app.innerHTML = `<h1>Account detail</h1><div class="bar"><a class="btn" href="/${q}">Back to accounts</a></div>
+      <div role="tablist"><button role="tab" aria-selected="true" id="t1">Overview</button><button role="tab" aria-selected="false" id="t2">Activity</button></div>
+      <p id="panel">Overview panel</p>`;
+    document.getElementById('t2').onclick = () => { document.getElementById('panel').textContent = 'Activity panel'; };
+    document.getElementById('t1').onclick = () => { document.getElementById('panel').textContent = 'Overview panel'; };
+  } else {
+    app.innerHTML = `<h1>Accounts</h1>${variant === 'nosearch' ? '<div class="search"></div>' : variant === 'inner' ? '<div class="search" style="padding:0"><span>Search</span></div>' : variant === 'far' ? '<div class="search"></div><span style="position:absolute;left:900px;top:700px">Search</span>' : `<div class="search${variant === 'search16' ? ' wide-pad' : ''}"${variant === 'lh' ? ' style="line-height:30px"' : ''}>Search</div>`}<div class="bar"><button id="filters" aria-haspopup="dialog">Filters</button><button id="view" class="${bad ? 'bad-pad' : ''}">Compact view</button><button id="help" type="button">Help</button></div><div id="late" hidden><span></span><span></span><span></span><span></span></div>
+      <table><thead><tr><th>Account</th><th>${bad ? 'Owner name' : 'Owner'}</th></tr></thead>
+      <tbody><tr><td><a href="/detail/1${q}">Acme</a></td><td>Ann</td></tr><tr><td><a href="/detail/2${q}">Globex</a></td><td>Bo</td></tr></tbody></table>`;
+    document.getElementById('view').onclick = () => document.querySelector('table').classList.toggle('compact');
+    // planted: the page is still drawing itself after load (a chart finishing) — four parts go a moment after the
+    // mapper's settle, while a press is being read; Help does nothing
+    setTimeout(() => document.getElementById('late')?.remove(), 900);
+    if (!bad) document.getElementById('filters').onclick = () => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.textContent = 'Filter by status'; document.body.append(d); };
+  }
+</script></body></html>

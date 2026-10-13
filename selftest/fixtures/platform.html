@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- A synthetic product for the platform track's self-test (scripts/selftest_platform.mjs). Every token below is
+     planted with a known answer; nothing here belongs to a real product. -->
+<html lang="en" class="font-inter">
+<head>
+<meta charset="utf-8">
+<title>Fixture product</title>
+<link rel="stylesheet" href="__XORIGIN__/fonts/fixture.css">
+<style>
+  @font-face { font-family: "Fixture Sans"; font-weight: 400; src: url(fixture.woff2) format("woff2"); }
+  :root {
+    /* Tailwind v4 shape: oklch colours under --color-*, one --spacing base, --text-* with paired line heights */
+    --color-primary: oklch(0.55 0.2 260);
+    --color-surface: oklch(0.985 0 0);
+    --color-muted: var(--color-surface);
+    --color-on-primary: oklch(1 0 0);
+    --color-foreground: oklch(0.145 0 0);
+    --color-border: oklch(0 0 0 / 10%);
+    --spacing: 0.25rem;
+    --text-sm: 0.875rem;
+    --text-sm--line-height: calc(1.25 / 0.875);
+    --font-weight-medium: 500;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    /* shadcn on Tailwind 3 shape: bare hsl channels, spent inside hsl() */
+    --accent: 222.2 47.4% 11.2%;
+    /* shadcn's --card: spent inside box-shadow more often than as a background — still a colour */
+    --card: oklch(0.99 0.01 250);
+    /* next/font: a self-reference on :root, the family on a class of <html> that wins */
+    --font-sans: var(--font-sans);
+    /* a radius spent only through a shorthand, and one derived from it with calc() */
+    --radius: 0.625rem;
+    --radius-md: calc(var(--radius) - 2px);
+    /* declared and never spent: its role must come from its value, labelled derived */
+    --unused-gap: 12px;
+    /* a framework internal: must be left out */
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    /* declared twice on :root (a base sheet, then an override): the later one is the token */
+    --shadow-md: 0 4px 6px rgba(0,0,0,.1);
+  }
+  :root { --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1); }
+  /* dark:start */ @media (prefers-color-scheme: dark) {
+    :root { --color-primary: oklch(0.7 0.15 260); --color-surface: oklch(0.2 0 0); }
+  } /* dark:end */
+  html.font-inter { --font-sans: "Inter", system-ui, sans-serif; }
+  .rounded-lg { border-radius: var(--radius); }
+  .bg-card { background-color: var(--card); }
+  .ring-a { box-shadow: 0 0 0 1px var(--card); } .ring-b { box-shadow: 0 1px 2px var(--card); }
+  @media (min-width: 768px) { .wide { display: block; } }
+  @media (min-width: 1024px) { .wider { display: block; } }
+  .card { --card-pad: 12px; padding: var(--card-pad); } /* scoped: not a global token */
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--color-surface); color: var(--color-foreground); text-rendering: optimizeLegibility; font-synthesis: none; }
+  .btn { background-color: var(--color-primary); color: var(--color-on-primary); border-radius: var(--radius-md); padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+         font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: var(--font-weight-medium); box-shadow: var(--shadow-sm); border: 0; }
+  .btn:hover { opacity: 0.9; }
+  .chip { background: hsl(var(--accent)); color: var(--color-on-primary); border-radius: var(--radius); padding: 4px 8px; }
+  .muted { background-color: var(--color-muted); border: 1px solid var(--color-border); box-shadow: var(--shadow-md); }
+  .off { background-color: #ff00aa; padding: 8px; } /* planted: a colour no token holds — on two elements */
+  .odd { border-radius: 13px; } /* planted: a radius off the declared scale, on one element only (a one-off) */
+  .card.is-open { background: rgb(250, 240, 200); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Fixture</h1>
+    <button class="btn"><svg class="lucide lucide-search" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>Save</button>
+    <svg aria-label="Company logo" width="20" height="20" viewBox="0 0 20 20"><rect width="20" height="20" rx="4" fill="currentColor"></rect></svg>
+    <svg class="chart" width="300" height="160" viewBox="0 0 300 160"><rect width="300" height="160" fill="currentColor"></rect></svg>
+    <svg style="display:none"><symbol id="icon-star" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"></path></symbol></svg>
+    <svg width="16" height="16" aria-label="Favourite"><use href="#icon-star"></use></svg>
+    <svg width="16" height="16" aria-label="Settings"><use href="/sprite.svg#icon-gear"></use></svg>
+    <img src="/bell.svg" alt="Notifications" width="16" height="16">
+    <i class="material-icons" style="font-family: 'Material Icons'; font-style: normal; font-size: 16px">search</i>
+    <span class="chip rounded-lg">Chip</span>
+    <div data-slot="card" class="rounded-lg bg-card ring-a">Card one</div><div data-slot="card" class="rounded-lg bg-card ring-b">Card two</div>
+    <div class="muted">Muted surface</div>
+    <div class="off">Off-system</div>
+    <div class="off odd">Off-system again</div>
+    <!-- hidden state (spec 4.1): a background only a class toggled by a script produces. No pseudo-class reaches it. -->
+    <div class="card" id="acc">Accordion</div>
+  </main>
+  <script>document.getElementById('acc').addEventListener('click', (e) => e.currentTarget.classList.toggle('is-open'));</script>
+</body>
+</html>

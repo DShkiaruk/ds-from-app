@@ -1,0 +1,1088 @@
+{
+ "organization-baseline": {
+  "meta": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 2
+   }
+  },
+  "elements": [
+   {
+    "path": "div#root",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 1053
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header",
+    "tag": "header",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 52
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 17,
+     "w": 115,
+     "h": 19
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 18,
+     "w": 16,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 19,
+     "w": 13,
+     "h": 7
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 30,
+     "w": 13,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(3)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 26,
+     "w": 13,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Policy models",
+    "rect": {
+     "x": 40,
+     "y": 17,
+     "w": 91,
+     "h": 19
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>nav",
+    "tag": "nav",
+    "role": null,
+    "label": "Options",
+    "text": "",
+    "rect": {
+     "x": 147,
+     "y": 8,
+     "w": 240,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 1",
+    "rect": {
+     "x": 151,
+     "y": 12,
+     "w": 74,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(2)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 2",
+    "rect": {
+     "x": 227,
+     "y": 12,
+     "w": 77,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(3)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 3",
+    "rect": {
+     "x": 306,
+     "y": 12,
+     "w": 77,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1175,
+     "y": 8,
+     "w": 249,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div",
+    "tag": "div",
+    "role": "group",
+    "label": "Access level",
+    "text": "",
+    "rect": {
+     "x": 1175,
+     "y": 8,
+     "w": 161,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1179,
+     "y": 12,
+     "w": 81,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1189,
+     "y": 19,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1191,
+     "y": 20,
+     "w": 10,
+     "h": 13
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1195,
+     "y": 25,
+     "w": 4,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Admin",
+    "rect": {
+     "x": 1210,
+     "y": 18,
+     "w": 40,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1262,
+     "y": 12,
+     "w": 70,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1272,
+     "y": 19,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg>circle",
+    "tag": "circle",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1276,
+     "y": 20,
+     "w": 6,
+     "h": 6
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg>path",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1274,
+     "y": 27,
+     "w": 10,
+     "h": 5
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "User",
+    "rect": {
+     "x": 1293,
+     "y": 18,
+     "w": 29,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1342,
+     "y": 8,
+     "w": 82,
+     "h": 34
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1355,
+     "y": 18,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1357,
+     "y": 19,
+     "w": 11,
+     "h": 11
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1357,
+     "y": 19,
+     "w": 3,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Reset",
+    "rect": {
+     "x": 1376,
+     "y": 17,
+     "w": 35,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 52,
+     "w": 1440,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside",
+    "tag": "aside",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 52,
+     "w": 260,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Back to app",
+    "rect": {
+     "x": 8,
+     "y": 64,
+     "w": 244,
+     "h": 33
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 73,
+     "w": 16,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 19,
+     "y": 76,
+     "w": 5,
+     "h": 9
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main",
+    "tag": "main",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 260,
+     "y": 52,
+     "w": 1180,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 284,
+     "y": 74,
+     "w": 1132,
+     "h": 72
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)>div",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 284,
+     "y": 74,
+     "w": 354,
+     "h": 72
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)>div>h1",
+    "tag": "h1",
+    "role": null,
+    "label": null,
+    "text": "Organization baseline",
+    "rect": {
+     "x": 284,
+     "y": 86,
+     "w": 354,
+     "h": 34
+    },
+    "interactive": false
+   }
+  ]
+ },
+ "policies-management": {
+  "meta": {
+   "viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 2
+   }
+  },
+  "elements": [
+   {
+    "path": "div#root",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 1053
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header",
+    "tag": "header",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "w": 1440,
+     "h": 52
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 17,
+     "w": 115,
+     "h": 19
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 18,
+     "w": 16,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 19,
+     "w": 13,
+     "h": 7
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 30,
+     "w": 13,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>svg>path:nth-of-type(3)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 17,
+     "y": 26,
+     "w": 13,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(1)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Policy models",
+    "rect": {
+     "x": 40,
+     "y": 17,
+     "w": 91,
+     "h": 19
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>nav",
+    "tag": "nav",
+    "role": null,
+    "label": "Options",
+    "text": "",
+    "rect": {
+     "x": 147,
+     "y": 8,
+     "w": 240,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 1",
+    "rect": {
+     "x": 151,
+     "y": 12,
+     "w": 74,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(2)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 2",
+    "rect": {
+     "x": 227,
+     "y": 12,
+     "w": 77,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>nav>button:nth-of-type(3)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Option 3",
+    "rect": {
+     "x": 306,
+     "y": 12,
+     "w": 77,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1175,
+     "y": 8,
+     "w": 249,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div",
+    "tag": "div",
+    "role": "group",
+    "label": "Access level",
+    "text": "",
+    "rect": {
+     "x": 1175,
+     "y": 8,
+     "w": 161,
+     "h": 36
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1179,
+     "y": 12,
+     "w": 81,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1189,
+     "y": 19,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1191,
+     "y": 20,
+     "w": 10,
+     "h": 13
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1195,
+     "y": 25,
+     "w": 4,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(1)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Admin",
+    "rect": {
+     "x": 1210,
+     "y": 18,
+     "w": 40,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1262,
+     "y": 12,
+     "w": 70,
+     "h": 28
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1272,
+     "y": 19,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg>circle",
+    "tag": "circle",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1276,
+     "y": 20,
+     "w": 6,
+     "h": 6
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>svg>path",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1274,
+     "y": 27,
+     "w": 10,
+     "h": 5
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>div>button:nth-of-type(2)>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "User",
+    "rect": {
+     "x": 1293,
+     "y": 18,
+     "w": 29,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1342,
+     "y": 8,
+     "w": 82,
+     "h": 34
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1355,
+     "y": 18,
+     "w": 15,
+     "h": 15
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1357,
+     "y": 19,
+     "w": 11,
+     "h": 11
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>svg>path:nth-of-type(2)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 1357,
+     "y": 19,
+     "w": 3,
+     "h": 3
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>header>div:nth-of-type(2)>button>span",
+    "tag": "span",
+    "role": null,
+    "label": null,
+    "text": "Reset",
+    "rect": {
+     "x": 1376,
+     "y": 17,
+     "w": 35,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 52,
+     "w": 1440,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside",
+    "tag": "aside",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 0,
+     "y": 52,
+     "w": 260,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)",
+    "tag": "button",
+    "role": null,
+    "label": null,
+    "text": "Back to app",
+    "rect": {
+     "x": 8,
+     "y": 64,
+     "w": 244,
+     "h": 33
+    },
+    "interactive": true
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)>svg",
+    "tag": "svg",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 16,
+     "y": 73,
+     "w": 16,
+     "h": 16
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>aside>button:nth-of-type(1)>svg>path:nth-of-type(1)",
+    "tag": "path",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 19,
+     "y": 76,
+     "w": 5,
+     "h": 9
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main",
+    "tag": "main",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 260,
+     "y": 52,
+     "w": 1180,
+     "h": 1001
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 284,
+     "y": 74,
+     "w": 1132,
+     "h": 72
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)>div",
+    "tag": "div",
+    "role": null,
+    "label": null,
+    "text": "",
+    "rect": {
+     "x": 284,
+     "y": 74,
+     "w": 405,
+     "h": 72
+    },
+    "interactive": false
+   },
+   {
+    "path": "div#root>div>main>div:nth-of-type(1)>div>h1",
+    "tag": "h1",
+    "role": null,
+    "label": null,
+    "text": "Policies management",
+    "rect": {
+     "x": 284,
+     "y": 86,
+     "w": 405,
+     "h": 34
+    },
+    "interactive": false
+   }
+  ]
+ }
+}

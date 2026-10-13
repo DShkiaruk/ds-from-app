@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- A synthetic single-URL product for the shared-URL self-test. Every screen lives at ONE URL and the menu swaps the
+     page in place; the sign-in is a sessionStorage flag (no flag: a "Sign in" page); the Settings screen holds a
+     masked secret with a "Show" button that unmasks it, and two unnamed trash-can buttons (an Ant Design data-icon and a Lucide class) that delete a row. The menu
+     item "Order history" carries a word the unsafe list knows. With ?proto=1 the same page is its own "prototype":
+     each screen has a hash route (#/orders, #/settings) and the menu navigates to it; ?proto=1&variant=bad plants a
+     dead "Settings" menu item. Nothing real. -->
+<html lang="en"><head><meta charset="utf-8"><title>SPA fixture</title>
+<style>
+  body { margin: 0; font: 14px/20px system-ui, sans-serif; color: #111; background: #fafafa; }
+  nav ul { list-style: none; margin: 0; padding: 16px; display: flex; gap: 8px; }
+  nav li { padding: 6px 12px; border: 1px solid #ddd; background: #fff; border-radius: 6px; cursor: pointer; }
+  nav li[aria-current="page"] { background: #111; color: #fff; }
+  main { padding: 24px; } h1 { font-size: 24px; margin: 0 0 16px; }
+  button { font: inherit; padding: 6px 12px; border: 1px solid #ddd; background: #fff; border-radius: 6px; color: #111; }
+  table { border-collapse: collapse; } th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
+</style></head>
+<body><header><button id="help" type="button">Help</button><button id="details" type="button">Details</button></header><nav><ul role="menu"><li role="menuitem" data-key="orders">Order history</li><li role="menuitem" data-key="settings">Settings</li></ul></nav><main id="app"></main>
+<script>
+  const q = new URLSearchParams(location.search);
+  const proto = q.get('proto') === '1', bad = q.get('variant') === 'bad';
+  const app = document.getElementById('app');
+  const SECRET = 'sk_live_PLANTED_SECRET_1234';
+  // the product remembers the screen last open in localStorage (as real ones keep a tab or a program): a reload of its
+  // one URL shows THAT screen, so an instrument that reuses one browser context sees the last press, not the screen
+  let screen = proto ? (location.hash.replace('#/', '') || 'orders') : (localStorage.getItem('last') || 'orders');
+  function render() {
+    if (!proto && !sessionStorage.getItem('signedIn')) { document.querySelector('nav').remove(); app.innerHTML = '<h1>Sign in</h1><p>Your session has ended.</p>'; return; }
+    for (const k of ['orders', 'settings']) document.querySelector(`[data-key=${k}]`).setAttribute('aria-current', screen === k ? 'page' : 'false');
+    if (screen === 'orders') app.innerHTML = '<h1>Orders</h1><button id="sync" onclick="fetch(\'/spa/api/sync\', { method: \'POST\' })">Sync now</button><table><thead><tr><th>Order</th><th>Total</th></tr></thead><tbody><tr><td>A-1</td><td>$10.00</td></tr><tr><td>A-2</td><td>$12.00</td></tr></tbody></table>';
+    // the prototype remembers in storage that the orders screen was seen and, having seen it, titles Settings
+    // differently: an instrument that keeps one browser context for every screen checks Settings in that state
+    if (proto && screen === 'orders') localStorage.setItem('seenOrders', '1');
+    if (screen !== 'orders') {
+      app.innerHTML = '<h1>' + (proto && localStorage.getItem('seenOrders') ? 'Settings after orders' : 'Settings') + '</h1><section><h2>API credentials</h2><p>Secret: <code id="secret">••••••••34</code> <button id="show">Show</button></p><table><tbody><tr id="row"><td>Key 1</td><td><button id="trash"><svg data-icon="delete" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr><tr id="row2"><td>Key 2</td><td><button id="trash2"><svg class="lucide lucide-trash-2" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr></tbody></table></section>';
+      document.getElementById('show').onclick = () => { document.getElementById('secret').textContent = SECRET; };
+      document.getElementById('trash').onclick = () => document.getElementById('row').remove();
+      document.getElementById('trash2').onclick = () => document.getElementById('row2').remove();
+    }
+  }
+  const go = (k) => { if (proto) { location.hash = `#/${k}`; } else { screen = k; localStorage.setItem('last', k); render(); } };
+  document.querySelector('[data-key=orders]').onclick = () => go('orders');
+  document.querySelector('[data-key=settings]').onclick = () => { if (!(proto && bad)) go('settings'); };
+  window.addEventListener('hashchange', () => { if (proto) { screen = location.hash.replace('#/', '') || 'orders'; render(); } });
+  // Help opens a layer over the whole page and nothing closes it: an instrument that re-opens the same #/route without
+  // a reload finds every later control under it (the first real prototype: every control after "Assistant" DEAD)
+  document.getElementById('help').onclick = () => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Help'); d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4)'; document.body.append(d); };
+  // Details looks harmless and sends a write over a WebSocket (what a Firebase / LiveView / collaborative-editor product does)
+  document.getElementById('details').onclick = () => { const ws = new WebSocket(`ws://${location.host}/ws`); ws.onopen = () => ws.send('{"event":"delete_record"}'); };
+  // a component library's generated id, new on every load: a selector that stops at it finds nothing the next time
+  document.querySelector('nav ul').id = `rc-menu-uuid-${Math.random().toString(36).slice(2, 8)}-1-popup`;
+  render();
+</script></body></html>

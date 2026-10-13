@@ -1,0 +1,6 @@
+{
+  "name": "ds-from-app",
+  "version": "0.1.0",
+  "description": "A live web app → its design tokens (each saying how it was obtained), components and transitions, decided by the designer on a checkpoint page; then a Workbench repo with a test flow and Storybook on those tokens.",
+  "author": { "name": "Eleken" }
+}

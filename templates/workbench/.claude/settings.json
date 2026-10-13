@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/tools/stop-check.mjs\"", "timeout": 300 } ] }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "plugins": ["stylelint-declaration-strict-value"],
+  "ignoreFiles": ["src/tokens/**", "src/foundations/**", "dist/**", "storybook-static/**"],
+  "rules": {
+    "color-no-hex": true,
+    "color-named": "never",
+    "function-disallowed-list": ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color"],
+    "scale-unlimited/declaration-strict-value": [
+      ["/color$/", "background", "fill", "stroke", "font", "font-size", "font-family", "font-weight", "line-height", "letter-spacing", "/radius$/", "/^padding/", "/^margin/", "gap", "row-gap", "column-gap", "box-shadow"],
+      {
+        "ignoreValues": [
+          "0", "0px", "auto", "inherit", "initial", "unset", "none", "normal", "transparent", "currentColor", "50%", "100%",
+          "/^var\\(\\s*--[\\w-]+\\s*(,\\s*var\\(\\s*--[\\w-]+\\s*\\)\\s*)*\\)$/",
+          "/^calc\\(\\s*-1\\s*\\*\\s*var\\(\\s*--[\\w-]+\\s*\\)\\s*\\)$/",
+          "/^(repeating-)?(linear|radial|conic)-gradient\\(\\s*((var\\(\\s*--[\\w-]+\\s*\\)|to [a-z ]+|-?\\d+(\\.\\d+)?(deg|turn|%)|in [a-z ]+|at [a-z ]+|,)\\s*)+\\)$/",
+          "/^var\\(\\s*--[\\w-]+\\s*\\)\\s*\\/\\s*var\\(\\s*--[\\w-]+\\s*\\)$/",
+          "/^url\\(.*\\)$/"
+        ],
+        "ignoreVariables": false, "expandShorthand": true, "ignoreFunctions": false, "disableFix": true,
+        "message": "Use a token: var(--…) from src/tokens (Storybook → Foundations). Nothing fits? Write NEEDS-TOKEN in plan/progress.md and ask the designer."
+      }
+    ]
+  }
+}

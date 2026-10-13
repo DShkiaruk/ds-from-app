@@ -1,0 +1,21 @@
+{
+  "name": "ds-from-app-plugin",
+  "private": true,
+  "type": "module",
+  "description": "Scripts of the ds-from-app Claude Code plugin",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"tests/*.test.mjs\"",
+    "selftest": "node --test --test-concurrency=1 \"selftest/*.test.mjs\"",
+    "selftest:workbench": "node --test --test-concurrency=1 selftest/heavy/workbench.test.mjs",
+    "check": "npm test && npm run selftest"
+  },
+  "dependencies": {
+    "playwright-core": "1.62.1"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

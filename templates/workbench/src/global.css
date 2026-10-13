@@ -1,0 +1,10 @@
+/* Global resets only. The product's own page background, text colour and font are in src/tokens/canvas.css. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
