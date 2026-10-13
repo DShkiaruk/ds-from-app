@@ -71,7 +71,9 @@ and why, what was refused and why.
 `tokens.mjs` says a dark theme exists and none was captured, capture it before going on.
 
 ### 3 · Checkpoint
-[references/tokens.md](references/tokens.md) § The checkpoint. Never continue before the designer pressed the button.
+[references/tokens.md](references/tokens.md) § The checkpoint. Never continue before the designer pressed the button. The page's server
+exits by itself once Done is pressed (exit 0): never stop it, and never kill any process by name (`pkill`, `killall`):
+only a process you started, by its PID.
 
 ### 4 · The Workbench
 If git has no name/email, ask the designer for them — never invent one. Commit the extraction (on main):
