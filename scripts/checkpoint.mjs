@@ -17,6 +17,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { product } from './lib/product.mjs';
 import { bestCaptures } from './lib/card-capture.mjs';
+import { excludedPartElements } from '../templates/workbench/tools/lib/flow-model.mjs';
+import { parseColor, oklabDistance } from './lib/color.mjs';
 
 const EXT = 'co.eleken.ds';
 const USAGE = 'usage: node scripts/checkpoint.mjs prepare|serve <repo> [--port 6020] [--lang uk|en]';
@@ -76,9 +78,60 @@ function prepare() {
       states: (c.states ?? []).map((s) => s.state).filter((s) => s !== 'default'), part, include: !part,
     };
   });
+  // Colours only an excluded part paints: a lit-* (or other derived) colour whose painted uses, across all captures, all
+  // fall inside the elements of one excluded part that has texts is added to that part's tokens (noted in tokenNotes).
+  // A colour also painted anywhere outside the part is never added. The designer still sees it on the page.
+  const excluded = (prev.excluded ?? []).map((x) => ({ ...x }));
+  const SIDES = ['Top', 'Right', 'Bottom', 'Left'];
+  const paintedBy = (e) => {
+    const v = e.values ?? {}, out = [];
+    const wide = (w) => w === undefined || parseFloat(w) > 0;
+    if (v.color) out.push(v.color);
+    if (v.backgroundColor) out.push(v.backgroundColor);
+    for (const k of ['fill', 'stroke', 'textDecorationColor']) if (v[k]) out.push(v[k]);
+    for (const sd of SIDES) if (v[`border${sd}Color`] && wide(v[`border${sd}Width`]) && v[`border${sd}Style`] !== 'none') out.push(v[`border${sd}Color`]);
+    if (v.outlineColor && wide(v.outlineWidth) && v.outlineStyle !== 'none') out.push(v.outlineColor);
+    return out.map((c) => parseColor(c)).filter((c) => c && c.a > 0);
+  };
+  const same = (a, b) => Math.abs(a.a - b.a) < 0.02 && oklabDistance(a, b) <= 0.01;
+  const colourTokens = Object.entries(doc.tokens).filter(([key, t]) => (t.$extensions?.[EXT]?.role ?? 'other') === 'color' && (key.startsWith('lit-') || t.$provenance?.label === 'derived'))
+    .map(([key, t]) => ({ key, values: [t.$value, ...Object.values(t.$modes ?? {})].filter((x) => typeof x === 'string' && !x.startsWith('{')).map((x) => parseColor(x)).filter(Boolean) })).filter((t) => t.values.length);
+  const withTexts = excluded.filter((x) => (x.texts ?? []).length);
+  if (withTexts.length && colourTokens.length) {
+    const texts = withTexts.map((x) => x.texts);
+    const uses = new Map(colourTokens.map((t) => [t.key, { out: 0, in: new Map(withTexts.map((x) => [x, 0])) }]));
+    for (const c of caps) {
+      const mine = new Map(withTexts.map((x) => [x, new Set(excludedPartElements(c, x.texts, texts))]));
+      const count = (e, painted) => {
+        for (const t of colourTokens) {
+          if (!painted.some((p) => t.values.some((tv) => same(tv, p)))) continue;
+          const u = uses.get(t.key), owners = withTexts.filter((x) => mine.get(x).has(e));
+          if (!owners.length) u.out++; else for (const x of owners) u.in.set(x, u.in.get(x) + 1);
+        }
+      };
+      for (const e of c.elements ?? []) { const painted = paintedBy(e); if (painted.length) count(e, painted); }
+      // a state paints too (a bar button's :hover background): its element is inside or outside the part like at rest
+      const byPath = new Map((c.elements ?? []).map((e) => [e.path, e]));
+      for (const st of c.states ?? []) {
+        const e = byPath.get(st.path);
+        if (!e) continue;
+        for (const sample of [...Object.values(st.byForcedPseudo ?? {}), ...Object.values(st.byInteraction ?? {})]) {
+          const to = Object.fromEntries(Object.entries(sample?.properties ?? {}).map(([k, v]) => [k, v?.to]));
+          const painted = paintedBy({ values: { ...e.values, ...to } });
+          if (painted.length) count(e, painted);
+        }
+      }
+    }
+    for (const x of withTexts) for (const t of colourTokens) {
+      const u = uses.get(t.key);
+      if (u.out || !u.in.get(x) || [...u.in].some(([y, n]) => y !== x && n) || (x.tokens ?? []).includes(t.key)) continue;
+      x.tokens = [...(x.tokens ?? []), t.key];
+      x.tokenNotes = { ...(x.tokenNotes ?? {}), [t.key]: 'painted only inside this part' };
+    }
+  }
   const out = {
     project: P.name, source: doc.$meta?.platform?.source?.url ?? caps[0]?.meta.requestedUrl ?? '', preparedAt: new Date().toISOString(),
-    screens: [...screens.values()], tokens, components, excluded: prev.excluded ?? [], questions: prev.questions ?? [],
+    screens: [...screens.values()], tokens, components, excluded, questions: prev.questions ?? [],
   };
   fs.writeFileSync(path.join(P.spec, 'checkpoint.json'), JSON.stringify(out, null, 1) + '\n');
   console.log(`checkpoint.json: ${out.screens.length} screen(s), ${tokens.length} token(s) (${tokens.filter((t) => t.nameStatus === 'proposed').length} with proposed names), ${components.length} component candidate(s); kept ${out.excluded.length} excluded part(s), ${out.questions.length} question(s)`);
@@ -160,7 +213,7 @@ ${c.part ? `<div class="meta">${esc(s.part)}</div>` : ''}</div>
 <div class="side">${labelBadge(c.label)}${nameBadge(c.nameStatus)}</div></div>`;
   const exRow = (x) => `<div class="row" data-kind="excluded" data-id="${esc(x.id)}">
 <input type="checkbox" aria-label="${esc(x.what)}" ${x.include ? 'checked' : ''}>
-<div><div class="name">${esc(x.what)}</div><div class="meta">${esc(x.why)}</div>${x.tokens?.length ? `<div class="meta">${esc(s.excludedTokens)}: ${esc(x.tokens.join(', '))}</div>` : ''}${x.texts?.length ? `<div class="meta">${esc(s.excludedTexts)}: ${esc(x.texts.map((t) => `"${t}"`).join(', '))}</div>` : ''}</div><div></div></div>`;
+<div><div class="name">${esc(x.what)}</div><div class="meta">${esc(x.why)}</div>${x.tokens?.length ? `<div class="meta">${esc(s.excludedTokens)}: ${esc(x.tokens.map((t) => (x.tokenNotes?.[t] ? `${t} (${x.tokenNotes[t]})` : t)).join(', '))}</div>` : ''}${x.texts?.length ? `<div class="meta">${esc(s.excludedTexts)}: ${esc(x.texts.map((t) => `"${t}"`).join(', '))}</div>` : ''}</div><div></div></div>`;
   const qs = (inv.questions ?? []).map((q) => `<div class="q" data-id="${esc(q.id)}"><div class="name">${esc(q.text)}</div>${(q.options ?? []).map((o) => `<label><input type="radio" name="q:${esc(q.id)}" value="${esc(o)}" ${q.answer === o ? 'checked' : ''}> ${esc(o)}</label>`).join('')}</div>`).join('');
   const client = { badToken: s.badToken, badComponent: s.badComponent, summary: s.summary, saved: s.saved, savedSub: s.savedSub, notSaved: s.notSaved, notSavedSub: s.notSavedSub };
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
