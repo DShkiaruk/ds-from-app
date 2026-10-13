@@ -102,7 +102,7 @@ const bandCapture = (extra = []) => ({
 
 test('excludedBand (R28.1): the excluded texts sit in a full-width band at the top → its height', async () => {
   const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
-  assert.deepEqual(excludedBand(bandCapture(), ['option 1', ' Admin ']), { top: 52 });
+  assert.deepEqual(excludedBand(bandCapture(), ['option 1', ' Admin ']), { top: 52, left: 0 });
 });
 
 test('excludedBand (R28.1): no band when an excluded element is mid-page, when interface of the app sits in the band, or nothing is excluded', async () => {
@@ -124,27 +124,63 @@ const PILOT_EXCLUDED = [
   ['Policy models', 'Option 1', 'Option 2', 'Option 3', 'Reset'],
   ['Admin', 'User'],
 ];
-test('excludedBand (M2): the pilot\'s two real captures, with the two excluded parts of its decisions.json, still give { top: 52 }', async () => {
+test('excludedBand (M2): the pilot\'s two real captures, with the two excluded parts of its decisions.json, still give { top: 52, left: 0 }', async () => {
   const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
   const caps = JSON.parse(readFileSync(new URL('./fixtures/pilot-band-captures.json', import.meta.url), 'utf8'));
-  for (const [name, cap] of Object.entries(caps)) assert.deepEqual(excludedBand(cap, PILOT_EXCLUDED), { top: 52 }, name);
+  for (const [name, cap] of Object.entries(caps)) assert.deepEqual(excludedBand(cap, PILOT_EXCLUDED), { top: 52, left: 0 }, name);
 });
 
 test('excludedBand (M2): a second excluded part elsewhere (a floating Feedback button) does not hide the band; the band is the largest, never a sum', async () => {
   const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
   const cap = bandCapture([{ tag: 'button', text: 'Feedback', path: 'div#root>div>main>button', rect: { x: 1300, y: 800, w: 100, h: 36 } }]);
-  assert.deepEqual(excludedBand(cap, [['Option 1', 'Admin'], ['Feedback']]), { top: 52 });
+  assert.deepEqual(excludedBand(cap, [['Option 1', 'Admin'], ['Feedback']]), { top: 52, left: 0 });
   assert.equal(excludedBand(cap, [['Option 1', 'Admin', 'Feedback']]), null, 'pooled (one part), the old behaviour: no band');
 });
 
 test('excludedBand (M3): data is not a hit (a members table cell "Admin"), and the app\'s own header with a brand text is never a band', async () => {
   const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
   const cell = bandCapture([{ tag: 'td', text: 'Admin', path: 'div#root>div>main>table>tbody>tr>td', rect: { x: 300, y: 300, w: 80, h: 30 } }]);
-  assert.deepEqual(excludedBand(cell, [['Option 1', 'Admin']]), { top: 52 });
+  assert.deepEqual(excludedBand(cell, [['Option 1', 'Admin']]), { top: 52, left: 0 });
   const brand = bandCapture([{ tag: 'span', text: 'Acme', path: 'div#root>header>span', rect: { x: 16, y: 17, w: 60, h: 19 } }]);
   assert.equal(excludedBand(brand, [['Option 1', 'Admin']]), null, 'an element in the band with its own text that is not excluded');
   const labelled = bandCapture([{ tag: 'button', text: '', label: 'Account', interactive: true, path: 'div#root>header>button', rect: { x: 1380, y: 12, w: 40, h: 28 } }]);
   assert.equal(excludedBand(labelled, [['Option 1', 'Admin']]), null, 'a control in the band with its own label that is not excluded');
+});
+
+// a prototype-only column at the very left
+const leftCapture = (extra = [], w = 220) => ({
+  meta: { viewport: { width: 1440, height: 900 } },
+  elements: [
+    { tag: 'aside', text: '', path: 'div#root>aside', rect: { x: 0, y: 0, w, h: 900 } },
+    { tag: 'button', text: 'Persona A', path: 'div#root>aside>button:nth-of-type(1)', rect: { x: 16, y: 100, w: 180, h: 32 } },
+    { tag: 'button', text: 'Persona B', path: 'div#root>aside>button:nth-of-type(2)', rect: { x: 16, y: 140, w: 180, h: 32 } },
+    { tag: 'h1', text: 'Policies', path: 'div#root>main>h1', rect: { x: 260, y: 40, w: 300, h: 32 } },
+    ...extra,
+  ],
+});
+test('excludedBand (left): a full-height column at the very left gives { top: 0, left }', async () => {
+  const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
+  assert.deepEqual(excludedBand(leftCapture(), [['Persona A', 'Persona B']]), { top: 0, left: 220 });
+  assert.equal(excludedBand(leftCapture([], 700), [['Persona A', 'Persona B']]), null, 'wider than 40% of the viewport');
+  const short = leftCapture(); short.elements[0].rect.h = 400;
+  assert.equal(excludedBand(short, [['Persona A', 'Persona B']]), null, 'not full height');
+});
+test('excludedBand (left): the app\'s own left menu is refused', async () => {
+  const { excludedBand } = await import('../templates/workbench/tools/lib/flow-model.mjs');
+  const menu = leftCapture([{ tag: 'a', text: 'Dashboard', path: 'div#root>aside>nav>a', rect: { x: 16, y: 120, w: 150, h: 28 } }]);
+  assert.equal(excludedBand(menu, [['Persona A', 'Persona B']]), null);
+  const labelled = leftCapture([{ tag: 'button', text: '', label: 'Settings', interactive: true, path: 'div#root>aside>button', rect: { x: 16, y: 800, w: 40, h: 28 } }]);
+  assert.equal(excludedBand(labelled, [['Persona A', 'Persona B']]), null);
+});
+test('excludedBand (left): a top bar and a left column from two parts give both', async () => {
+  const { excludedBand, findInPrototype } = await import('../templates/workbench/tools/lib/flow-model.mjs');
+  const cap = leftCapture(); cap.elements.push(
+    { tag: 'header', text: '', path: 'div#root>header', rect: { x: 0, y: 0, w: 1440, h: 52 } },
+    { tag: 'button', text: 'Admin', path: 'div#root>header>button:nth-of-type(1)', rect: { x: 1210, y: 18, w: 40, h: 16 } }, { tag: 'button', text: 'User', path: 'div#root>header>button:nth-of-type(2)', rect: { x: 1260, y: 18, w: 40, h: 16 } });
+  assert.deepEqual(excludedBand(cap, [['Persona A', 'Persona B'], ['Admin', 'User']]), { top: 52, left: 220 });
+  // the prototype sits `left` px further left and `top` px higher
+  const e = { text: 'Policies', rect: { x: 260, y: 92 } }, m = { text: 'Policies', rect: { x: 40, y: 40 } };
+  assert.equal(findInPrototype(e, [m], [], 52, 220), m);
 });
 
 // M4: a navigation list built without <nav> in the prototype
