@@ -116,15 +116,20 @@ try {
     if (!els.length) { console.log('  (no text-bearing element in the story)'); continue; }
     const notIn = [];
     for (const s of els) {
-      // the first capture (flow screens first) that shows this text; among its elements with that text, the closest one
+      // every capture that shows this text; the closest element wins: fewest differences, then the same tag, then the
+      // flow's screens first. A text can be a menu item on one screen and the heading on another, and a story can show a
+      // state (the selected item) that only another screen captured. A real difference stays: no candidate is closer.
       let best = null, found = false;
-      for (const list of capEls) {
-        const cands = list.filter((e) => e.text === s.text && e.rect);
-        if (!cands.length) continue;
-        found = true;
-        for (const c of cands) { const r = compare(s, c, root); r.hard = r.diffs.length + r.size.filter((z) => !z.container).length; if (!best || r.hard < best.hard) best = r; }
-        break;
-      }
+      const less = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; };
+      capEls.forEach((list, ci) => {
+        for (const c of list.filter((e) => e.text === s.text && e.rect)) {
+          found = true;
+          const r = compare(s, c, root);
+          r.hard = r.diffs.length + r.size.filter((z) => !z.container).length;
+          r.rank = [r.hard, c.tag === s.tag ? 0 : 1, ci];
+          if (!best || less(r.rank, best.rank)) best = r;
+        }
+      });
       if (!found) { unknown++; if (!notIn.includes(s.text)) notIn.push(s.text); continue; }
       const soft = best.size.filter((z) => z.container).map((z) => `${z.txt} (may be the story's container)`);
       if (best.hard) {
