@@ -138,7 +138,8 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     await green('build-storybook', 'valid Probe');
     const docsIds = () => Object.values(JSON.parse(readFileSync(join(repo, 'storybook-static', 'index.json'), 'utf8')).entries).filter((e) => e.type === 'docs').map((e) => e.id);
     assert.ok(docsIds().includes('components-probe--docs'), `a Docs page for the component: ${docsIds()}`);
-    assert.ok(!docsIds().some((id) => id.startsWith('foundations-')), `no Docs page for Foundations: ${docsIds()}`);
+    assert.ok(!docsIds().some((id) => id.startsWith('foundations-') && id !== 'foundations-overview--docs'), `no autodocs page for the Foundations stories: ${docsIds()}`);
+    assert.ok(docsIds().includes('foundations-overview--docs'), `Foundations/Overview (the generated MDX) is there: ${docsIds()}`);
 
     const plant = async (file, content, script, why, pattern) => {
       writeFileSync(F[file], content);
