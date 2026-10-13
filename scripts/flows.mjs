@@ -33,14 +33,14 @@
 // export that opens the print dialog, a "Copy" that would put a credential on the clipboard). Listed under `refused`.
 //
 // Usage: node scripts/flows.mjs <product-repo> [--storage auth.json] [--url <screen url> …] [--viewport 1440x900]
-//        [--landmark '<css>'] [--allow '<regex>'] [--deny '<regex>'] [--only <screen name> …] [--allow-writes (fixture/sandbox only)] [--reads '<regex>']
+//        [--landmark '<css>'] [--allow '<regex>'] [--deny '<regex>'] [--only <screen name> …] [--allow-writes (fixture/sandbox only)] [--reads '<regex>'] [--socket-reads '<regex over the socket URL>']
 // Writes <repo>/flows/flows.json and a screenshot of every state reached (flows/<screen>--<n>.png).
 
 import { launch } from './lib/browser.mjs';
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary } from './lib/safety.mjs';
 import { restoreSession } from './lib/session.mjs';
 
 const args = process.argv.slice(2);
@@ -149,7 +149,7 @@ const fresh = async () => {
   if (ctx) await ctx.close().catch(() => {});
   ctx = await browser.newContext({ viewport: { width: W, height: H }, storageState: storage, reducedMotion: 'reduce' });
   await restoreSession(ctx, storage);
-  if (blockedLists) blockedLists.push(await blockWrites(ctx, opt('--reads')));
+  if (blockedLists) blockedLists.push(await blockWrites(ctx, opt('--reads'), opt('--socket-reads')));
   page = await ctx.newPage();
 };
 mkdirSync(join(P.spec, 'flows'), { recursive: true });
@@ -271,7 +271,7 @@ let merged = screens;
 if (ONLY.length && existsSync(out)) { const prev = JSON.parse(readFileSync(out, 'utf8')).screens || []; merged = [...prev.filter((x) => !ONLY.includes(x.name)), ...screens]; }
 const doc = {
   _why: 'Every transition the product offers on its captured screens, pressed once each, read-only (scripts/flows.mjs). The prototype must reproduce each one: the Workbench repo\'s tools/parity.mjs checks it.',
-  mappedAt: new Date().toISOString(), viewport: `${W}x${H}`, landmark: LANDMARK ?? undefined, allow: ALLOW ? opt('--allow') : undefined, deny: DENY ? opt('--deny') : undefined, blockedWrites: blocked ? [...new Set(blocked.map((b) => `${b.method} ${new URL(b.url).pathname}`))] : undefined, reads: blocked ? opt('--reads') ?? null : undefined, screens: merged,
+  mappedAt: new Date().toISOString(), viewport: `${W}x${H}`, landmark: LANDMARK ?? undefined, allow: ALLOW ? opt('--allow') : undefined, deny: DENY ? opt('--deny') : undefined, blockedWrites: blocked ? [...new Set(blocked.map((b) => `${b.method} ${new URL(b.url).pathname}`))] : undefined, reads: blocked ? opt('--reads') ?? null : undefined, socketReads: blocked ? opt('--socket-reads') ?? null : undefined, screens: merged,
 };
 const T = merged.flatMap((s) => s.transitions);
 // Screens the product navigates to that no capture holds: the screen list's gaps, found by following the product.
@@ -283,4 +283,6 @@ const withUnpressed = merged.filter((s) => s.unpressedCount);
 if (withUnpressed.length) console.log(`  clickable elements that are not controls were not pressed (${withUnpressed.reduce((n, s) => n + s.unpressedCount, 0)} on ${withUnpressed.length} screens, e.g. "${withUnpressed[0].unpressed[0].text}") — what they open is unknown; capture one with --click '<selector>' --as-screen if the designer wants that screen`);
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
+const sockLine = blockedLists ? socketSummary(...blockedLists) : null;
+if (sockLine) console.log(`  ${sockLine}`);
 console.log(`flows -> flows/flows.json: ${merged.length} screens, ${T.length} controls pressed (${T.filter((t) => t.effect.kind === 'navigate').length} navigate, ${T.filter((t) => t.effect.kind === 'open').length} open, ${T.filter((t) => t.effect.kind === 'change').length} change, ${T.filter((t) => t.effect.kind === 'none').length} did nothing), ${merged.reduce((n, s) => n + (s.refused?.length || 0), 0)} refused as unsafe`);

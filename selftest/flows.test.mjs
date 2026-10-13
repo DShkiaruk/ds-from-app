@@ -69,6 +69,23 @@ test('a single-URL product: screens by landmark, refusals, and the write block',
   } finally { rmSync(sp, { recursive: true, force: true }); }
 });
 
+test('--socket-reads lets a matching socket through, counts its messages and says so', async () => {
+  const sp = fixtureRepo('dsfa-spa-sock-');
+  try {
+    const origin = new URL(S.url).origin;
+    const signedIn = join(sp, 'session.auth.json');
+    writeFileSync(signedIn, JSON.stringify({ cookies: [], origins: [{ origin, localStorage: [], sessionStorage: [{ name: 'signedIn', value: '1' }] }] }));
+    await run('capture.mjs', '--url', `${S.url}spa/`, '--storage', signedIn, '--screen', 'orders', '--as-screen', '--out', join(sp, 'baseline'), '--no-interact', '--settle', '300');
+    await run('capture.mjs', '--url', `${S.url}spa/`, '--storage', signedIn, '--click', '[data-key="settings"]', '--as-screen', '--screen', 'settings', '--out', join(sp, 'baseline'), '--no-interact', '--settle', '300');
+    dropPngs(join(sp, 'baseline'));
+    S.resetPosts(); S.resetWs();
+    const m = await run('flows.mjs', sp, '--storage', signedIn, '--landmark', 'h1', '--allow', 'Order history', '--settle', '250', '--socket-reads', '/ws$');
+    assert.equal(m.status, 0, m.stderr);
+    assert.ok(S.wsMessages() > 0, 'the message reaches the server through the allowed socket');
+    assert.match(m.stdout, /socket messages let through: [1-9]\d* on ws:\/\/127\.0\.0\.1:\d+\/ws/);
+    assert.equal(S.posts(), 0, 'POST writes are still blocked');
+  } finally { rmSync(sp, { recursive: true, force: true }); }
+});
 test('by default flows.mjs blocks writes', async () => {
   const sp = fixtureRepo('dsfa-spa-def-');
   try {

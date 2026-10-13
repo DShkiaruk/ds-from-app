@@ -34,7 +34,7 @@
 import { launch } from './lib/browser.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
 
 // ── properties we read. Fixed on purpose: a capture whose property list drifts
@@ -62,6 +62,8 @@ const PROPS = [
   'transitionProperty', 'transitionDuration', 'transitionTimingFunction', 'transitionDelay',
   'animationName', 'animationDuration', 'animationTimingFunction', 'animationIterationCount',
   'cursor', 'pointerEvents',
+  // line styles (added later, at the end): a focus ring or a border that is dashed / dotted is not a solid one
+  'outlineStyle', 'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle',
 ];
 
 // properties that inherit, so a match with the parent means "not chosen here"
@@ -118,6 +120,7 @@ function args(argv) {
     else if (a === '--allow-writes') o.blockWrites = false;  // opt-out: only on a fixture or a sandbox
     // with --block-writes: the non-GET requests that are READS (a regex over the path) — they go through
     else if (a === '--reads') o.reads = next();
+    else if (a === '--socket-reads') o.socketReads = next();
     else if (a === '--allow-redirect') o.allowRedirect = true;
   }
   return o;
@@ -281,6 +284,35 @@ const PAGE_WALK = ({ props, inherited }) => {
     if (svgs.size >= 400) break;
   }
   out.svgs = [...svgs.values()];
+  // Drawings: a visible inline <svg> that is not an icon (an icon = both sides <= 48 px, or already in svgs): a frame, an
+  // illustration, a divider. Recorded once with its box, its sanitized markup and the computed stroke / fill of each shape,
+  // so the kit reproduces it as is. Capped at 100; markup over 20 KB is cut and marked truncated.
+  const drawings = new Map();
+  const SHAPES = 'rect, circle, ellipse, line, polyline, polygon, path';
+  for (const svg of document.querySelectorAll('svg')) {
+    if (svg.closest('svg') !== svg) continue;
+    const r = svg.getBoundingClientRect();
+    const scs = getComputedStyle(svg);
+    if (!r.width || !r.height || scs.display === 'none' || scs.visibility === 'hidden') continue;
+    if (r.width <= 48 && r.height <= 48) continue;
+    const copy = svg.cloneNode(true);
+    for (const n of copy.querySelectorAll('script, foreignObject')) n.remove();
+    for (const n of [copy, ...copy.querySelectorAll('*')]) {
+      for (const a of [...n.attributes]) {
+        const v = a.value.trim();
+        if (/^on/i.test(a.name) || (/^(xlink:)?href$/i.test(a.name) && !v.startsWith('#'))) n.removeAttribute(a.name);
+      }
+    }
+    let markup = copy.outerHTML;
+    const truncated = markup.length > 20000;
+    if (truncated) markup = markup.slice(0, 20000);
+    if (svgs.size && [...svgs.values()].some((v) => v.markup === svg.outerHTML)) continue;
+    if (drawings.has(markup)) { drawings.get(markup).count++; continue; }
+    if (drawings.size >= 100) break;
+    const shapes = [...svg.querySelectorAll(SHAPES)].slice(0, 40).map((sh) => { const c = getComputedStyle(sh); return { tag: sh.tagName.toLowerCase(), stroke: c.stroke, 'stroke-width': c.strokeWidth, 'stroke-dasharray': c.strokeDasharray, fill: c.fill }; });
+    drawings.set(markup, { box: { width: Math.round(r.width), height: Math.round(r.height) }, classes: (svg.getAttribute('class') || '').trim(), label: svg.getAttribute('aria-label') || null, markup, ...(truncated ? { truncated: true } : {}), shapes, count: 1 });
+  }
+  out.drawings = [...drawings.values()];
   out.svgSkipped = svgSkipped;
   // Icons drawn as <img src="….svg"> (fetched after the walk), and icon fonts: a glyph font renders a ligature or a
   // pseudo-element, not markup — recorded by family and glyph name, since no SVG exists to copy.
@@ -432,7 +464,7 @@ const READ_STATE = ([path, props]) => {
 
 const STATE_PROPS = [
   'color', 'backgroundColor', 'borderTopColor', 'borderTopWidth', 'boxShadow',
-  'outlineColor', 'outlineWidth', 'outlineOffset', 'opacity', 'transform',
+  'outlineColor', 'outlineWidth', 'outlineOffset', 'outlineStyle', 'opacity', 'transform',
   'textDecorationLine', 'cursor', 'filter',
   'transitionDuration', 'transitionDelay',   // read so the settle wait is derived, not guessed
 ];
@@ -591,7 +623,7 @@ const context = await browser.newContext({
 });
 // sessionStorage is not part of storageState: restore it from the session file (lib/session.mjs).
 const restoredSession = await restoreSession(context, o.storage);
-const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(context, o.reads) : null;
+const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(context, o.reads, o.socketReads) : null;
 
 // login mode: open the page, let a human sign in, then persist the session.
 if (o.loginUrl) {
@@ -753,6 +785,7 @@ const capture = {
     sessionStorageRestored: restoredSession || undefined,
     blockedWrites: blockedWrites ? blockedWrites.map((b) => `${b.method} ${new URL(b.url).pathname}`) : undefined,
     readsAllowed: o.blockWrites ? o.reads ?? null : undefined,
+    socketReadsAllowed: o.blockWrites ? o.socketReads ?? null : undefined,
     reducedMotion: o.reducedMotion,
     propertyList: PROPS,
     inheritedProperties: [...INHERITED],
@@ -782,6 +815,7 @@ const capture = {
   documentStyle: walk.documentStyle,
   svgs: [...walk.svgs, ...externalIcons],
   svgSkipped: walk.svgSkipped,
+  drawings: walk.drawings,
   iconFonts: walk.iconFonts,
   stack: walk.stack,
   conditions: { media: walk.media, container: walk.container, supports: walk.supports, layers: walk.layers },
@@ -807,4 +841,6 @@ console.log(`  custom properties ${Object.keys(walk.customProperties).length} ·
 console.log(`  @media ${walk.media.length} · @container ${walk.container.length} · @layer ${walk.layers.length} · shadow roots ${walk.shadowRoots}`);
 console.log(`  state samples ${states.length}: ${forced} responded to forced pseudo-classes, ${acted} to real input, ${attrStates} of those changed an attribute`);
 if (blockedWrites?.length) console.log(`  ${blockedSummary(blockedWrites)}`);
+const sockLine = blockedWrites ? socketSummary(blockedWrites) : null;
+if (sockLine) console.log(`  ${sockLine}`);
 await browser.close();
