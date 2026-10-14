@@ -22,6 +22,10 @@ export const findChrome = (list = candidates()) => list.find((p) => existsSync(p
 
 const first = (e) => String(e?.message ?? e).split('\n')[0];
 
+// Sign-in needs a window a person can see and type into; every other mode runs hidden. --headless hides the sign-in
+// window too (tests only). Always a boolean: launch() treats a missing value as hidden.
+export const headlessFor = ({ loginUrl, headless } = {}) => !loginUrl || headless === true;
+
 export async function launch({ headless = true } = {}) {
   let chromium;
   try {

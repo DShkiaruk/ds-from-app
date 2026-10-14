@@ -31,8 +31,10 @@ const MENU = '<!doctype html><html><head><meta charset="utf-8"><title>Menu</titl
 
 export async function startServer() {
   let posts = 0;
+  const agents = [];
   let wsMessages = 0;
   const server = createServer((req, res) => {
+    agents.push(req.headers['user-agent'] || '');
     if (req.method === 'POST') { posts++; res.writeHead(204); res.end(); return; }
     // a hosting platform's bot check, as Vercel answered the 2nd cold run (403, its own page instead of the app)
     if (req.url.startsWith('/bot-check')) { res.writeHead(403, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Vercel Security Checkpoint</title><h1>Vercel Security Checkpoint</h1><p>Failed to verify your browser</p><p>Code 21</p>'); return; }
@@ -69,5 +71,5 @@ export async function startServer() {
   });
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   html = htmlTemplate.replaceAll('__XORIGIN__', `http://localhost:${server.address().port}`);
-  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close(), posts: () => posts, resetPosts: () => { posts = 0; }, wsMessages: () => wsMessages, resetWs: () => { wsMessages = 0; } };
+  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close(), posts: () => posts, agents: () => agents.slice(), resetAgents: () => { agents.length = 0; }, resetPosts: () => { posts = 0; }, wsMessages: () => wsMessages, resetWs: () => { wsMessages = 0; } };
 }

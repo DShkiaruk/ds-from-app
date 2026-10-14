@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseColor, toHex } from '../scripts/lib/color.mjs';
 import { UNSAFE, REVEAL } from '../scripts/lib/safety.mjs';
 import { existsSync } from 'node:fs';
-import { launch, findChrome } from '../scripts/lib/browser.mjs';
+import { launch, findChrome, headlessFor } from '../scripts/lib/browser.mjs';
 
 test('colour: any notation a browser hands back is read, garbage is null', () => {
   assert.equal(toHex(parseColor('rgb(255, 0, 170)')), '#FF00AA');
@@ -21,6 +21,15 @@ test('safety: an action on data is unsafe, navigation is not; "Show" unmasks', (
 test('safety: words that end, refuse or cut something are unsafe; look-alike words are not', () => {
   for (const w of ['Decline', 'End now', 'Terminate', 'Cancel subscription', 'Stop scan', 'Disconnect', 'Regenerate key', 'Rotate key', 'Deny']) assert.ok(UNSAFE.test(w), `${w} must be unsafe`);
   for (const w of ['Backend', 'Weekend', 'Legend', 'Calendar', 'Endpoints', 'Stopwatch']) assert.ok(!UNSAFE.test(w), `${w} must not be unsafe`);
+});
+
+test('headlessFor: sign-in opens a visible window unless --headless; every other mode is hidden; always a boolean', () => {
+  assert.equal(headlessFor({ loginUrl: 'https://app.example.com/login' }), false, 'sign-in without --headless: a window the designer can use');
+  assert.equal(headlessFor({ loginUrl: 'https://app.example.com/login', headless: undefined }), false);
+  assert.equal(headlessFor({ loginUrl: 'https://app.example.com/login', headless: true }), true);
+  assert.equal(headlessFor({ url: 'https://app.example.com/' }), true);
+  assert.equal(headlessFor({}), true);
+  assert.equal(headlessFor(), true);
 });
 
 test('findChrome: the first path that exists, or null', () => {

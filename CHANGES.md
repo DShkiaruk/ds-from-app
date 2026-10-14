@@ -1,5 +1,13 @@
 # Changes
 
+## 0.2.3 — 2026-10-14
+
+- **The sign-in window opened hidden**, so the designer had nothing to sign in to (found by the first designer's run).
+  `capture.mjs --login-url` passed `undefined` instead of `false`, and the browser took its default, hidden. The window
+  decision is now `headlessFor()` in `lib/browser.mjs`, always a boolean, with a test; a new selftest runs sign-in
+  without `--headless` and fails if the page sees a hidden browser (`HeadlessChrome`) — the old code fails it. Every
+  earlier sign-in test passed `--headless`, which is why none caught it.
+
 ## 0.2.2 — 2026-10-14
 
 - Said precisely what "one level" means: the tools go to every new screen in turn, and open one layer (a menu, a dialog)

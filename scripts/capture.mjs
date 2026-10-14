@@ -31,7 +31,7 @@
  * Exit codes: 0 captured · 2 navigation failed · 3 nothing visible captured · 4 redirected to another screen.
  */
 
-import { launch } from './lib/browser.mjs';
+import { launch, headlessFor } from './lib/browser.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
@@ -612,8 +612,8 @@ if (o.loginUrl && !o.untilUrl && !process.stdin.isTTY) {
 const [W, H] = o.viewport.split('x').map(Number);
 
 // Login mode needs a visible window — a human is going to type into it. Every
-// other mode runs headless.
-const browser = await launch({ headless: !o.loginUrl || o.headless }); // sign-in needs a window a person can use; --headless only for tests
+// other mode runs headless (lib/browser.mjs headlessFor).
+const browser = await launch({ headless: headlessFor(o) });
 const context = await browser.newContext({
   viewport: { width: W, height: H },
   colorScheme: o.scheme,

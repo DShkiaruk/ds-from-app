@@ -110,6 +110,18 @@ test('sign-in mode saves the session into a folder that does not exist yet', asy
   assert.equal(statSync(target).mode & 0o777, 0o600, 'the session file is readable by its owner only');
 });
 
+test('sign-in mode opens a visible browser window: the page never sees a headless browser', async () => {
+  // A hidden browser names itself HeadlessChrome in every request; a window the designer can see does not.
+  const target = join(dir, 'visible', 's.auth.json');
+  S.resetAgents();
+  const r = await run('capture.mjs', '--login-url', `${S.url}spa/`, '--until-url', 'spa', '--save-storage', target);
+  assert.equal(r.status, 0, r.stderr);
+  const agents = S.agents();
+  assert.ok(agents.length > 0, 'the sign-in page was requested');
+  assert.ok(agents.every((a) => !/Headless/i.test(a)), `the sign-in window is visible, not hidden:\n${agents.join('\n')}`);
+  assert.ok(existsSync(target), 'the session is saved');
+});
+
 test('by default capture.mjs blocks writes and uses no real input', async () => {
   const sp = join(dir, 'default-ro');
   mkdirSync(sp, { recursive: true });
