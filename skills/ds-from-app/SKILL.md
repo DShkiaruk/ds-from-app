@@ -60,8 +60,9 @@ Never pass `--allow-writes` on a real product. Never pass `--interact` on a real
    system); is there a dark theme; where to keep the project (default `~/<product slug>-workbench`; the full path must be ASCII, no Cyrillic folder anywhere in it). If the app shows real
    people's data, say the screenshots will hold it and the repository stays private. Ask for the test flow from start
    to end (screen → action → screen) and the states it must show; say what the tools reach by themselves (every safe
-   control, tabs, rows, one level into menus and dialogs, hover / focus / pressed) and what they cannot (typed text,
-   saving or deleting, deeper levels, a state the account's data does not have — an empty list, an error): those
+   control, tabs, rows, each new screen in turn, one layer into menus and dialogs, hover / focus / pressed), what they
+   reach when named (a deeper state: a chain of clicks of any length, `capture.mjs --click … --click …`), and what they
+   cannot (typed text, saving or deleting, a state the account's data does not have — an empty list, an error): those
    become NEEDS-STATE unless the designer prepares the account so the state exists.
 3. `node scaffold.mjs init <repo> --product "<Name>" --url <url>`.
 4. Sign-in, when needed: [references/capture.md](references/capture.md) § Sign-in.
