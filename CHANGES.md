@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.1 — 2026-10-14
+
+- The first step asks for the test flow from start to end and the states it must show, and says what the tools reach
+  by themselves (every safe control, tabs, rows, one level into menus and dialogs, hover / focus / pressed) and what
+  they cannot (typed text, saving or deleting, deeper levels, a state the account's data does not have). START.md says
+  the same to the designer, with a line for the states in the first message.
+
 ## 0.2.0 — 2026-10-14
 
 Ready for other designers.
