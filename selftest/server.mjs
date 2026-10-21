@@ -39,12 +39,17 @@ export async function startServer() {
     // a hosting platform's bot check, as Vercel answered the 2nd cold run (403, its own page instead of the app)
     if (req.url.startsWith('/bot-check')) { res.writeHead(403, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Vercel Security Checkpoint</title><h1>Vercel Security Checkpoint</h1><p>Failed to verify your browser</p><p>Code 21</p>'); return; }
     if (req.url.startsWith('/go-elsewhere')) { res.writeHead(302, { location: '/' }); res.end(); return; }
+    // a signed-out product sends a screen on to its sign-in page, whose address no /login pattern names
+    if (req.url.startsWith('/members')) { res.writeHead(302, { location: '/LoginV2.aspx?ReturnUrl=%2fmembers' }); res.end(); return; }
+    if (req.url.startsWith('/LoginV2.aspx')) { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><html><head><meta charset="utf-8"><title>Logon</title></head><body><main><h1>Welcome</h1><form><input name="u"><input type="password" name="p"><button type="button">Continue</button></form></main></body></html>'); return; }
     if (req.url.startsWith('/fonts/')) { res.writeHead(200, { 'content-type': 'text/css' }); res.end(FONT_CSS); return; }
     if (req.url.startsWith('/sprite.svg') || req.url.startsWith('/bell.svg')) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(req.url.startsWith('/sprite') ? SPRITE : BELL); return; }
     res.writeHead(200, { 'content-type': 'text/html' });
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }
     if (req.url.startsWith('/nothing-here')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body></body></html>'); return; }
     if (req.url.startsWith('/rows')) { res.end(ROWS); return; }
+    // a product that signs out when its tab closes: a pagehide beacon and a keepalive POST, as such products send them
+    if (req.url.startsWith('/bye')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Bye</title></head><body><main><h1>Account</h1><button type="button" id="more">More</button><p id="t">Details</p></main><script>document.getElementById("more").onclick=()=>{document.getElementById("t").textContent="More details";};addEventListener("pagehide",()=>{navigator.sendBeacon("/bye/api/sign-out");fetch("/bye/api/tab-closed",{method:"POST",keepalive:true}).catch(()=>{});});</script></body></html>'); return; }
     if (req.url.startsWith('/actions')) { res.end(actionsHtml); return; }
     if (req.url.startsWith('/menu')) { res.end(MENU); return; }
     if (req.url.startsWith('/workbench-index')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body><main data-workbench-index><h1>Screens</h1><a href="#/x">x</a></main></body></html>'); return; }

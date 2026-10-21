@@ -1,5 +1,26 @@
 # Changes
 
+## 0.2.4 — 2026-10-21
+
+Found by the first designer's run: a product that signs her out each time its tab closes.
+- **A leak in the write block, fixed.** A write the page queues to outlive itself (`navigator.sendBeacon`, a keepalive
+  `fetch`) left after the page was gone, past every route: measured in Chrome 155 on `context.close()`,
+  `page.close()` and on loading the next page (`browser.close()` sent nothing). `flows.mjs` closes a context before
+  every press, so a product's "tab closed" requests, a sign-out among them, reached the server. They are now refused
+  in the page like any other write (`OUTLIVING_WRITES` in `lib/safety.mjs`): `sendBeacon` answers false, a keepalive
+  fetch that is not GET / HEAD / OPTIONS fails. A selftest plants such a page; the old code sends 3 writes, the new 0.
+- **One window for the whole run**, for a product that signs out when its tab closes, or keeps its sign-in only in
+  the tab it was made in. `capture.mjs --login-url … --until-url … --keep-open <slug>` opens the designer's Chrome on a
+  profile folder of its own (`~/.ds-from-app/windows/<slug>`, 0700) and leaves it open after sign-in; every
+  `capture.mjs` and `flows.mjs` run takes `--attach <slug>` and works in that tab, one run at a time;
+  `capture.mjs --close <slug>` closes it and deletes the folder. The size, scale (2x), scheme and the write block
+  belong to the connection and end with it. The window keeps the bar "Chrome is being controlled by automated test
+  software": nothing is disguised. In this mode `flows.mjs` loads every press in the same tab, so remembered UI state
+  carries over; flows.json says so (`window`). Selftests in `selftest/window.test.mjs` (opens a window).
+- **`flows.mjs` knows a sign-in page by more than its address.** It stopped on `/login`, `/sign-in`, `/auth`, but not
+  on `/LoginV2.aspx` (no word boundary after "Login"): a signed-out run mapped the sign-in page as the product's
+  screens and exited 0. A screen sent on to another address that asks for a password now stops it too (exit 3).
+
 ## 0.2.3 — 2026-10-14
 
 - **The sign-in window opened hidden**, so the designer had nothing to sign in to (found by the first designer's run).

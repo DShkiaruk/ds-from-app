@@ -40,8 +40,8 @@ and the command that fixes it (usually `npm install --omit=dev --prefix "${CLAUD
 |---|---|
 | `preflight.mjs` | Node, browser, git, disk — and the fix for each |
 | `scaffold.mjs init <repo> --product "<Name>" --url <url>` | the product's repository, **before** any capture |
-| `capture.mjs --url <url> --screen <name> --out <repo>/extraction/baseline [--storage <session>]` | one screen: every element's values, states, a screenshot |
-| `flows.mjs <repo> [--storage <session>]` | every safe control pressed once: transitions, and screens not captured yet |
+| `capture.mjs --url <url> --screen <name> --out <repo>/extraction/baseline [--storage <session> \| --attach <slug>]` | one screen: every element's values, states, a screenshot |
+| `flows.mjs <repo> [--storage <session> \| --attach <slug>]` | every safe control pressed once: transitions, and screens not captured yet |
 | `tokens.mjs <repo>` | captures → `extraction/tokens.json`, every token labelled |
 | `inventory.mjs <repo>` | captures → `extraction/components.draft.json` |
 | `checkpoint.mjs prepare\|serve <repo>` | the designer's decision page → `extraction/decisions.json` |
@@ -65,7 +65,8 @@ Never pass `--allow-writes` on a real product. Never pass `--interact` on a real
    cannot (typed text, saving or deleting, a state the account's data does not have — an empty list, an error): those
    become NEEDS-STATE unless the designer prepares the account so the state exists.
 3. `node scaffold.mjs init <repo> --product "<Name>" --url <url>`.
-4. Sign-in, when needed: [references/capture.md](references/capture.md) § Sign-in.
+4. Sign-in, when needed: [references/capture.md](references/capture.md) § Sign-in. A product that signs the designer out
+   when its tab closes: the same section, step 4 (one window for the whole run).
 
 ### 1 · Capture
 Follow [references/capture.md](references/capture.md) (screen names: by heading or menu label). End with a short report: screens captured, which did not open

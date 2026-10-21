@@ -32,6 +32,7 @@
  */
 
 import { launch, headlessFor } from './lib/browser.mjs';
+import { openWindow, connectWindow, closeWindow, signedInTab, lockWindow, emulate, fullShot } from './lib/window.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
@@ -97,6 +98,11 @@ function args(argv) {
     else if (a === '--login-url') o.loginUrl = next();
     else if (a === '--until-url') o.untilUrl = next();
     else if (a === '--headless') o.headless = true;
+    // One window for the whole run (lib/window.mjs): sign in with --keep-open <name> instead of --save-storage, work in
+    // that window with --attach <name>, close it with --close <name>.
+    else if (a === '--keep-open') o.keepOpen = next();
+    else if (a === '--attach') o.attach = next();
+    else if (a === '--close') o.close = next();
     else if (a === '--max-state-samples') o.maxStateSamples = Number(next());
     else if (a === '--settle') o.settle = Number(next());
     else if (a === '--motion') o.reducedMotion = false;   // opt OUT of reduced motion
@@ -597,14 +603,21 @@ function pickStateSamples(elements, max) {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 const o = args(process.argv);
+if (o.close) {
+  const was = await closeWindow(o.close);
+  console.log(was ? `the window "${o.close}" is closed; its profile folder (it held the sign-in) is deleted` : `no window "${o.close}" was open; its folder is deleted, if there was one`);
+  process.exit(0);
+}
 if (!o.url && !o.loginUrl) {
-  console.error('usage: node scripts/capture.mjs --url <URL> [--screen name] [--out dir] [--viewport WxH] [--scheme light|dark] [--storage auth.json]');
+  console.error('usage: node scripts/capture.mjs --url <URL> [--screen name] [--out dir] [--viewport WxH] [--scheme light|dark] [--storage auth.json | --attach <window>]');
   process.exit(2);
 }
-if (o.loginUrl && !o.saveStorage) {
-  console.error('refused: --login-url needs --save-storage <file outside the repository> (e.g. ~/.ds-from-app/sessions/<slug>.auth.json)');
+if (o.loginUrl && !o.saveStorage && !o.keepOpen) {
+  console.error('refused: --login-url needs --save-storage <file outside the repository> (e.g. ~/.ds-from-app/sessions/<slug>.auth.json), or --keep-open <slug> for a window that stays open');
   process.exit(2);
 }
+if (o.keepOpen && !o.loginUrl) { console.error('refused: --keep-open goes with --login-url (it is a way to sign in)'); process.exit(2); }
+if (o.attach && (o.storage || o.loginUrl)) { console.error('refused: --attach works in the window the designer signed in in: no --storage, no --login-url'); process.exit(2); }
 if (o.loginUrl && !o.untilUrl && !process.stdin.isTTY) {
   console.error("refused: --login-url needs --until-url '<regex of the first screen after sign-in>' when it is not run in a terminal");
   process.exit(2);
@@ -612,47 +625,82 @@ if (o.loginUrl && !o.untilUrl && !process.stdin.isTTY) {
 const [W, H] = o.viewport.split('x').map(Number);
 
 // Login mode needs a visible window — a human is going to type into it. Every
-// other mode runs headless (lib/browser.mjs headlessFor).
-const browser = await launch({ headless: headlessFor(o) });
-const context = await browser.newContext({
-  viewport: { width: W, height: H },
-  colorScheme: o.scheme,
-  reducedMotion: o.reducedMotion ? 'reduce' : 'no-preference',
-  storageState: o.storage && existsSync(o.storage) ? o.storage : undefined,
-  deviceScaleFactor: 2,
-});
-// sessionStorage is not part of storageState: restore it from the session file (lib/session.mjs).
-const restoredSession = await restoreSession(context, o.storage);
-const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(context, o.reads, o.socketReads) : null;
+// other mode runs headless (lib/browser.mjs headlessFor). An attached window (--attach) is the designer's, open already.
+let browser, context, attachedTab = null;
+try {
+  if (o.attach) {
+    browser = await connectWindow(o.attach);
+    if (!browser) { console.error(`no open window "${o.attach}" — it was closed, or never opened. Sign in again: capture.mjs --login-url <sign-in url> --until-url '<regex>' --keep-open ${o.attach}`); process.exit(2); }
+    lockWindow(o.attach);
+    context = browser.contexts()[0];
+    attachedTab = signedInTab(browser, o.url);
+    if (!attachedTab) { console.error(`the window "${o.attach}" has no tab open — sign in again with --keep-open ${o.attach}`); await browser.close(); process.exit(2); }
+  } else if (o.keepOpen) {
+    ({ browser } = await openWindow(o.keepOpen, o.loginUrl));
+    context = browser.contexts()[0];
+  } else {
+    browser = await launch({ headless: headlessFor(o) });
+    context = await browser.newContext({
+      viewport: { width: W, height: H },
+      colorScheme: o.scheme,
+      reducedMotion: o.reducedMotion ? 'reduce' : 'no-preference',
+      storageState: o.storage && existsSync(o.storage) ? o.storage : undefined,
+      deviceScaleFactor: 2,
+    });
+  }
+} catch (e) { console.error(String(e.message || e)); process.exit(2); }
+// sessionStorage is not part of storageState: restore it from the session file (lib/session.mjs). An attached window
+// has its own.
+const restoredSession = o.attach || o.keepOpen ? 0 : await restoreSession(context, o.storage);
+const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(attachedTab ?? context, o.reads, o.socketReads) : null;
 
 // login mode: open the page, let a human sign in, then persist the session.
 if (o.loginUrl) {
-  const p = await context.newPage();
-  await p.goto(o.loginUrl, { waitUntil: 'domcontentloaded' });
-  // Signed in when the person presses Enter — or, with no terminal to press it in (an agent's run), when the page
+  const p = o.keepOpen ? (context.pages()[0] ?? await context.newPage()) : await context.newPage();
+  const sockets = new Set();
+  const watch = (pg) => pg.on('websocket', (ws) => sockets.add(ws.url().replace(/[?#].*$/, '')));
+  for (const pg of context.pages()) watch(pg);
+  context.on('page', watch);
+  if (!o.keepOpen || p.url() === 'about:blank') await p.goto(o.loginUrl, { waitUntil: 'domcontentloaded' });
+  // Signed in when the person presses Enter — or, with no terminal to press it in (an agent's run), when a tab
   // reaches --until-url (a pattern: the product's own screen after sign-in), polled for up to ten minutes.
+  let at = p;
   if (o.untilUrl) {
     console.log(`\nA browser is open at ${o.loginUrl}. Sign in; this waits until the page is at ${o.untilUrl}.`);
     const re = new RegExp(o.untilUrl);
     const t0 = Date.now();
-    while (!re.test(p.url())) { if (Date.now() - t0 > 600000) { console.error('not signed in after 10 minutes'); await browser.close(); process.exit(2); } await p.waitForTimeout(1000); }
-    await p.waitForTimeout(1500);
+    for (;;) {
+      const hit = context.pages().find((x) => re.test(x.url()));
+      if (hit) { at = hit; break; }
+      if (Date.now() - t0 > 600000) { console.error('not signed in after 10 minutes'); await browser.close(); process.exit(2); }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    await at.waitForTimeout(1500);
   } else {
     console.log(`\nA browser is open at ${o.loginUrl}. Sign in, then press Enter here.`);
     await new Promise((res) => process.stdin.once('data', res));
   }
-  const target = o.saveStorage;
   // Keep only the product's own session. A sign-in through an identity provider leaves that provider's cookies in
   // the browser too (google.com, youtube.com …); a file that holds them is a whole account, not a product session.
   const state = await context.storageState();
-  const host = new URL(p.url()).hostname;
+  const host = new URL(at.url()).hostname;
   const site = (h) => h.replace(/^\./, '');
   const mine = (domain) => { const d = site(domain); return host === d || host.endsWith(`.${d}`) || d.endsWith(`.${host}`); };
   const kept = state.cookies.filter((c) => mine(c.domain));
   const dropped = state.cookies.length - kept.length;
   // sessionStorage too: a product that keeps part of its sign-in there is signed out in every new context otherwise.
-  const session = await readSessionStorage(p);
-  const origin = new URL(p.url()).origin;
+  const session = await readSessionStorage(at);
+  if (o.keepOpen) {
+    // Nothing is written: the window holds the sign-in. What it is made of, so a capture that lands on the sign-in page
+    // can be told why (names and counts only, never a value).
+    const browserBound = kept.filter((c) => c.expires === -1).length;
+    console.log(`signed in — the window "${o.keepOpen}" stays open. Every capture and flows.mjs run takes --attach ${o.keepOpen} and works in its tab. The designer leaves the window open and does not click in it while the tools work. Close it at the end: capture.mjs --close ${o.keepOpen}.`);
+    console.log(`  the sign-in: ${kept.length} cookie(s) of ${host}, ${browserBound} of them end with the browser · ${session.length} sessionStorage item(s) · sockets the page opened: ${sockets.size ? [...sockets].join(', ') : 'none seen'}`);
+    await browser.close(); // an attached window: this disconnects, the window stays
+    process.exit(0);
+  }
+  const target = o.saveStorage;
+  const origin = new URL(at.url()).origin;
   const origins = state.origins.filter((x) => mine(new URL(x.origin).hostname)).map((x) => (x.origin === origin ? { ...x, sessionStorage: session } : x));
   if (session.length && !origins.some((x) => x.origin === origin)) origins.push({ origin, localStorage: [], sessionStorage: session });
   mkdirSync(dirname(target), { recursive: true, mode: 0o700 }); // the sessions folder may not exist yet (~/.ds-from-app/sessions/)
@@ -663,7 +711,9 @@ if (o.loginUrl) {
   process.exit(0);
 }
 
-const page = await context.newPage();
+const page = attachedTab ?? await context.newPage();
+// an attached window: the size, scale, scheme and motion of a fresh context, for this connection only
+const attachedCdp = attachedTab ? await emulate(page, { width: W, height: H, deviceScaleFactor: 2, colorScheme: o.scheme, reducedMotion: o.reducedMotion ? 'reduce' : 'no-preference' }) : null;
 const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
 
@@ -759,7 +809,7 @@ const shot = join(o.out, `${screen}--${o.viewport}--${o.scheme}.png`);
 // against its own screenshot: the sidebar sat at a different scroll offset in the two,
 // and the reconstruction was right. A screenshot that postdates the rects cannot be
 // used to check them.
-await page.screenshot({ path: shot, fullPage: true }).catch(() => {});
+await (attachedCdp ? fullShot(attachedCdp, shot) : page.screenshot({ path: shot, fullPage: true })).catch(() => {});
 await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
 
 const cdp = await context.newCDPSession(page).catch(() => null);
@@ -770,7 +820,7 @@ const states = await captureStates(page, cdp, samples, o.interact, page.url());
 // A second screenshot AFTER probing, only when real input ran. The pair is the
 // measurement of what the probe did to the product — the alternative is to hope.
 const shotAfter = o.interact ? join(o.out, `${screen}--${o.viewport}--${o.scheme}--after-probe.png`) : null;
-if (shotAfter) await page.screenshot({ path: shotAfter, fullPage: true }).catch(() => {});
+if (shotAfter) await (attachedCdp ? fullShot(attachedCdp, shotAfter) : page.screenshot({ path: shotAfter, fullPage: true })).catch(() => {});
 
 const capture = {
   meta: {
@@ -788,6 +838,8 @@ const capture = {
     screenKind: o.asScreen ? 'screen' : undefined,
     looksLikeSignIn: looksLikeSignIn || undefined,
     sessionStorageRestored: restoredSession || undefined,
+    // captured in the window the designer signed in in (--attach), not in a fresh browser with a saved session
+    window: o.attach || undefined,
     blockedWrites: blockedWrites ? blockedWrites.map((b) => `${b.method} ${new URL(b.url).pathname}`) : undefined,
     readsAllowed: o.blockWrites ? o.reads ?? null : undefined,
     socketReadsAllowed: o.blockWrites ? o.socketReads ?? null : undefined,

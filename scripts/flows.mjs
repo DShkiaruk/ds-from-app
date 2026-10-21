@@ -41,6 +41,7 @@
 // Writes <repo>/flows/flows.json and a screenshot of every state reached (flows/<screen>--<n>.png).
 
 import { launch } from './lib/browser.mjs';
+import { connectWindow, signedInTab, lockWindow, emulate } from './lib/window.mjs';
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
@@ -146,7 +147,18 @@ const SNAP = (landmark) => {
   return { url: location.href, elements: document.querySelectorAll('body *').length, text: document.body.innerText.length, textHash: [...document.body.innerText].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0), surfaces, landmark: mark };
 };
 
-const browser = await launch();
+// --attach <name>: the window the designer signed in in (capture.mjs --keep-open, lib/window.mjs), for a product that
+// signs out when its tab closes. Every load happens in its one tab: a fresh context would hold no sign-in.
+const ATTACH = opt('--attach');
+if (ATTACH && opt('--storage')) { console.error('refused: --attach works in the window the designer signed in in: no --storage'); process.exit(2); }
+let browser;
+try {
+  if (ATTACH) {
+    browser = await connectWindow(ATTACH);
+    if (!browser) { console.error(`no open window "${ATTACH}" — it was closed, or never opened. Sign in again: capture.mjs --login-url <sign-in url> --until-url '<regex>' --keep-open ${ATTACH}`); process.exit(2); }
+    lockWindow(ATTACH);
+  } else browser = await launch();
+} catch (e) { console.error(String(e.message || e)); process.exit(2); }
 const storage = opt('--storage') ? here(opt('--storage')) : undefined;
 // writes are blocked by default (lib/safety.mjs); --allow-writes lifts it — only on a fixture or a sandbox. One list per context
 const blockedLists = args.includes('--allow-writes') ? null : [];
@@ -155,8 +167,19 @@ const blockedLists = args.includes('--allow-writes') ? null : [];
 // one context — so "a freshly loaded page" was the previous press's page. Found on the first single-URL product:
 // after one press opened its dashboards list, every analytics tab reloaded as that list, and after a program switch
 // every later screen was mapped in the other program. The fixture plants it (spa.html remembers its last screen).
+// An attached window has one tab and one context: what the product keeps in storage between loads (the last tab, the
+// last program) carries over there, which flows.json says (`window`).
 let ctx = null, page = null;
-const fresh = async () => {
+const fresh = async (s) => {
+  if (ATTACH) {
+    if (page) return;
+    page = signedInTab(browser, s?.url);
+    if (!page) { console.error(`the window "${ATTACH}" has no tab open — sign in again with --keep-open ${ATTACH}`); process.exit(2); }
+    ctx = page.context();
+    await emulate(page, { width: W, height: H, deviceScaleFactor: 1, reducedMotion: 'reduce' });
+    if (blockedLists) blockedLists.push(await blockWrites(page, opt('--reads'), opt('--socket-reads')));
+    return;
+  }
   if (ctx) await ctx.close().catch(() => {});
   ctx = await browser.newContext({ viewport: { width: W, height: H }, storageState: storage, reducedMotion: 'reduce' });
   await restoreSession(ctx, storage);
@@ -172,11 +195,15 @@ mkdirSync(join(P.spec, 'flows'), { recursive: true });
 // Load a screen in a fresh context: its URL, then its clicks (a screen of a single-URL product), each followed by a settle.
 const SIGNIN = /\/(log-?in|sign-?in|auth)\b/i;
 const openScreen = async (s) => {
-  await fresh();
+  await fresh(s);
   await page.goto(s.url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(s.url, { waitUntil: 'domcontentloaded' }).catch(() => {}));
   if (await looksLikeBotCheck(page)) { console.error(`stopped at ${s.name ?? s.url}: ${BOT_CHECK_ADVICE}`); process.exit(3); }
   // a session that expired sends every screen to the sign-in page: stop, rather than record the screens as unreachable
-  if (!SIGNIN.test(s.url) && SIGNIN.test(new URL(page.url()).pathname)) { console.error(`session expired: ${s.name ?? s.url} opened the sign-in page (${new URL(page.url()).pathname}) — refresh the session file and run again; flows.json was not written`); process.exit(3); }
+  // The sign-in page by its address (/login, /sign-in), or a page the screen's address sent on to that asks for a
+  // password: /LoginV2.aspx has no word boundary after "Login" (found on the first designer's product).
+  const landed = new URL(page.url()).pathname;
+  const toSignIn = SIGNIN.test(landed) || (landed !== new URL(s.url).pathname && (await page.locator('input[type="password"]').count().catch(() => 0)) > 0);
+  if (!SIGNIN.test(s.url) && toSignIn) { console.error(`session expired: ${s.name ?? s.url} opened the sign-in page (${landed}) — ${ATTACH ? `the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH})` : 'refresh the session file'} and run again; flows.json was not written`); process.exit(3); }
   await page.waitForTimeout(SETTLE);
   for (const c of s.clicks) {
     const l = page.locator(c).first();
@@ -361,6 +388,7 @@ if (tabsOpen.length) {
   doc.uncapturedTabs = tabsOpen;
   console.log(`  tab panels no capture holds (${tabsOpen.length}): ${tabsOpen.slice(0, 12).map((t) => `${t.screen} \u203a ${t.tab}`).join(', ')} — capture each the flow needs, e.g. node scripts/${tabsOpen[0].command}`);
 }
+if (ATTACH) doc.window = { attached: ATTACH, note: 'mapped in the window the designer signed in in: one tab for every load, so state the product keeps in storage (the last tab, the last program) carries from one press to the next load' };
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
 const sockLine = blockedLists ? socketSummary(...blockedLists) : null;

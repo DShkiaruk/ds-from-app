@@ -26,13 +26,17 @@ const first = (e) => String(e?.message ?? e).split('\n')[0];
 // window too (tests only). Always a boolean: launch() treats a missing value as hidden.
 export const headlessFor = ({ loginUrl, headless } = {}) => !loginUrl || headless === true;
 
-export async function launch({ headless = true } = {}) {
-  let chromium;
+/** playwright-core's chromium, or an error that says how to install it. */
+export async function playwright() {
   try {
-    ({ chromium } = await import('playwright-core'));
+    return (await import('playwright-core')).chromium;
   } catch (e) {
     throw new Error(`The browser library is not installed. Run: npm install --omit=dev --prefix "${PLUGIN}"\n(${first(e)})`);
   }
+}
+
+export async function launch({ headless = true } = {}) {
+  const chromium = await playwright();
   // Every installed candidate in order (a CHROME_PATH that is not a browser must not hide the real Chrome), then
   // Playwright's own Chromium.
   const tried = [];

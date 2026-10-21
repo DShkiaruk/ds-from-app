@@ -41,6 +41,17 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
 3. `warning: this looks like a sign-in page` — look at the screenshot first. If it is the sign-in page, the session is
    missing or expired: stop, sign in again, and re-capture that screen (every capture after an expired session is of
    the sign-in page). A screen that really holds a password field (change password, an API key) is fine.
+4. **A product that signs out when its tab closes** — the designer says so, or the first capture right after a fresh
+   sign-in is of the sign-in page again: a saved session cannot hold such a sign-in. Use one window for the whole run.
+   Sign in with `node capture.mjs --login-url <sign-in url> --until-url '<regex>' --keep-open <slug>` (in the
+   background, as in step 1): the window stays open after sign-in. Every capture and `flows.mjs` run then takes
+   `--attach <slug>` instead of `--storage` and works in that window's tab, one run at a time (a second is refused:
+   never run them in parallel). Tell the designer: leave the window open, do not close it or click in it while you
+   work; the pages in it will change. Its output line `the sign-in: …` says what the sign-in is made of (counts and
+   names, no values). In this mode `flows.mjs` loads every press in the same tab, so the last tab or filter the product
+   remembers carries over (flows.json says so under `window`). When the captures and flows are done, before the
+   checkpoint: `node capture.mjs --close <slug>` (it deletes the window's profile folder, which held the sign-in). A
+   window the designer closed: sign in again with `--keep-open`.
 
 ## Which screens
 1. Capture the entry screen.

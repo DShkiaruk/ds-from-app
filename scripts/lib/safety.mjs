@@ -42,7 +42,33 @@ export async function looksLikeBotCheck(page) {
 // The paths a hosting platform's bot check posts to: they change no product data.
 export const PLATFORM_CHECK = /^\/(\.well-known\/vercel\/security\/|cdn-cgi\/challenge-platform\/)/;
 
-export async function blockWrites(context, reads, socketReads) {
+// A write the page queues to outlive itself (navigator.sendBeacon, a keepalive fetch) leaves after the page is gone, past
+// the route below: closing a context or loading the next page sent a product's "tab closed" requests (a sign-out among
+// them) to the server. Measured 2026-10-21 (Chrome 155): a pagehide beacon and a keepalive POST reached the server on
+// context.close(), page.close() and on navigating away, with every route in place; browser.close() sent nothing. Found
+// when a product signed the designer out each time its tab closed, and flows.mjs closes a context before every press.
+// Refused in the page, like any other write: sendBeacon answers false (the browser could not queue it), a keepalive
+// fetch that is not GET / HEAD / OPTIONS fails as a network error. Installed before any page script runs.
+export const OUTLIVING_WRITES = () => {
+  const k = Symbol.for('ds-from-app.read-only');
+  if (window[k]) return;
+  window[k] = true;
+  if (navigator.sendBeacon) navigator.sendBeacon = () => false;
+  const f = window.fetch;
+  window.fetch = function (input, init) {
+    const req = input instanceof Request ? input : null;
+    const method = String(init?.method || req?.method || 'GET').toUpperCase();
+    if ((init?.keepalive || req?.keepalive) && !['GET', 'HEAD', 'OPTIONS'].includes(method)) return Promise.reject(new TypeError('Failed to fetch'));
+    return f.call(this, input, init);
+  };
+};
+
+// `target` is a browser context, or one page (an attached window, lib/window.mjs: the tab is already open, so the guard
+// goes into its current document too).
+export async function blockWrites(target, reads, socketReads) {
+  const context = target;
+  await target.addInitScript(OUTLIVING_WRITES);
+  if (typeof target.evaluate === 'function') await target.evaluate(OUTLIVING_WRITES).catch(() => {});
   const blocked = [];
   const socketRe = socketReads ? new RegExp(socketReads) : null;
   blocked.socketMessages = new Map();
