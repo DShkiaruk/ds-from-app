@@ -45,7 +45,7 @@ import { connectWindow, signedInTab, lockWindow, emulate } from './lib/window.mj
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { restoreSession } from './lib/session.mjs';
 
 const args = process.argv.slice(2);
@@ -57,7 +57,19 @@ const SETTLE = Number(opt('--settle') || 700);
 const LANDMARK = opt('--landmark') || null;   // null: the default landmark, the page's own heading (see SNAP)
 const ALLOW = opt('--allow') ? new RegExp(`^(?:${opt('--allow')})$`, 'i') : null;
 const DENY = opt('--deny') ? new RegExp(`^(?:${opt('--deny')})$`, 'i') : null;
+// --deny-selector '<selector>': a control refused by its selector exactly as flows.json prints it — for one that has no
+// name to deny (an unnamed "+" that opens another workspace tab for good, in a run with no page load). Repeatable.
+const DENY_SELECTORS = new Set(many('--deny-selector'));
 const ONLY = many('--only');
+// --no-reload (with --attach): no page load at all, for a product that signs out on every one. A screen is reached by
+// --home (a click chain to a known place: a menu item, repeatable) and then its capture's own clicks; between presses
+// the mapper returns the same way. A press that would load another page is held (answered 204, so the browser keeps
+// the page) and recorded as a navigation it did not follow.
+const NO_RELOAD = args.includes('--no-reload');
+const HOME = many('--home');
+// --dismiss '<selector>': what a press leaves over the page (an in-app window Escape does not close), closed by its own
+// close control before every way back to a screen (lib/safety.mjs dismiss). Repeatable.
+const DISMISS = many('--dismiss');
 
 // The screens: explicit --url, else every distinct resting URL the baseline captures were taken at, plus every capture
 // taken --as-screen (a screen reached by clicks at a URL other screens share).
@@ -90,12 +102,15 @@ const CONTROLS = (inner) => {
   const cssPath = (el) => { const parts = []; let n = el; while (n && n.nodeType === 1 && parts.length < 10) { let p = n.tagName.toLowerCase(); if (n.id && !/^(base-ui|radix|headlessui|:r|rc_|rc-)|uuid|\d{4,}/.test(n.id)) { parts.unshift(`${p}#${CSS.escape(n.id)}`); break; } const sib = [...(n.parentElement?.children || [])].filter((c) => c.tagName === n.tagName); if (sib.length > 1) p += `:nth-of-type(${sib.indexOf(n) + 1})`; parts.unshift(p); n = n.parentElement; } return parts.join('>'); };
   // an icon drawn as a picture (<img src=".../signout.svg">): its file name is its icon — found on the first designer's
   // product, whose top-bar log-out is an unnamed clickable <img> that no class names
+  // last of all, an unnamed control's own class: <div class="add-new-tab-button"> says what it does when nothing else
+  // names it (found on the first designer's product: its "+" opened another workspace tab for good)
+  const ownClass = (el) => String(el.className?.baseVal ?? el.className ?? '').split(/\s+/).filter((t) => /^[a-z][\w-]*$/i.test(t)).join(' ').slice(0, 60);
   const imgIcon = (el) => { const img = el.tagName === 'IMG' ? el : el.querySelector('img'); const src = img?.getAttribute('src') || ''; const f = src.split(/[?#]/)[0].split('/').pop() || ''; return (img?.getAttribute('alt') || '').trim() ? '' : f.replace(/\.(svg|png|gif|jpe?g|webp)$/i, ''); };
   const iconOf = (el) => {
     const d = el.querySelector('[data-icon]')?.getAttribute('data-icon'); if (d) return d;
     const svg = el.querySelector('svg'); const cls = (svg?.getAttribute('class') || '') + ' ' + (el.querySelector('[class*="icon-"], [class*="anticon-"]')?.getAttribute('class') || '');
     const m = cls.match(/(?:lucide-|anticon-|icon-|tabler-icon-|heroicon-)([a-z0-9-]+)/i); if (m) return m[1];
-    return imgIcon(el);
+    return imgIcon(el) || ownClass(el);
   };
   // inner: only what sits inside an opened layer (a menu, a dialog, a drawer), option rows included
   const layers = inner ? [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], [popover], dialog[open], [data-state="open"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }) : [document];
@@ -125,6 +140,9 @@ const UNPRESSED = () => {
   const cssPath = (el) => { const parts = []; let n = el; while (n && n.nodeType === 1 && parts.length < 10) { let p = n.tagName.toLowerCase(); if (n.id && !/^(base-ui|radix|headlessui|:r|rc_|rc-)|uuid|\d{4,}/.test(n.id)) { parts.unshift(`${p}#${CSS.escape(n.id)}`); break; } const sib = [...(n.parentElement?.children || [])].filter((c) => c.tagName === n.tagName); if (sib.length > 1) p += `:nth-of-type(${sib.indexOf(n) + 1})`; parts.unshift(p); n = n.parentElement; } return parts.join('>'); };
   // an icon drawn as a picture (<img src=".../signout.svg">): its file name is its icon — found on the first designer's
   // product, whose top-bar log-out is an unnamed clickable <img> that no class names
+  // last of all, an unnamed control's own class: <div class="add-new-tab-button"> says what it does when nothing else
+  // names it (found on the first designer's product: its "+" opened another workspace tab for good)
+  const ownClass = (el) => String(el.className?.baseVal ?? el.className ?? '').split(/\s+/).filter((t) => /^[a-z][\w-]*$/i.test(t)).join(' ').slice(0, 60);
   const imgIcon = (el) => { const img = el.tagName === 'IMG' ? el : el.querySelector('img'); const src = img?.getAttribute('src') || ''; const f = src.split(/[?#]/)[0].split('/').pop() || ''; return (img?.getAttribute('alt') || '').trim() ? '' : f.replace(/\.(svg|png|gif|jpe?g|webp)$/i, ''); };
   const out = [];
   const taken = new Set();
@@ -140,7 +158,7 @@ const UNPRESSED = () => {
     const sibs = [...(el.parentElement?.children || [])].filter((c) => c.tagName === el.tagName && c.className === el.className);
     if (sibs[0] !== el) continue;
     const text = (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80);
-    out.push({ text, selector: cssPath(el), group: sibs.length, icon: text ? '' : imgIcon(el) });
+    out.push({ text, selector: cssPath(el), group: sibs.length, icon: text ? '' : imgIcon(el) || ownClass(el) });
   }
   return out;
 };
@@ -158,6 +176,7 @@ const SNAP = (landmark) => {
 // --attach <name>: the window the designer signed in in (capture.mjs --keep-open, lib/window.mjs), for a product that
 // signs out when its tab closes. Every load happens in its one tab: a fresh context would hold no sign-in.
 const ATTACH = opt('--attach');
+if (NO_RELOAD && !ATTACH) { console.error('refused: --no-reload works in an attached window: pass --attach <slug>'); process.exit(2); }
 if (ATTACH && opt('--storage')) { console.error('refused: --attach works in the window the designer signed in in: no --storage'); process.exit(2); }
 let browser;
 try {
@@ -177,15 +196,29 @@ const blockedLists = args.includes('--allow-writes') ? null : [];
 // every later screen was mapped in the other program. The fixture plants it (spa.html remembers its last screen).
 // An attached window has one tab and one context: what the product keeps in storage between loads (the last tab, the
 // last program) carries over there, which flows.json says (`window`).
-let ctx = null, page = null;
+let ctx = null, page = null, heldNav = null;
+// tabs a press opened (window.open, a target=_blank link): recorded as `newTab`, left open — closing a tab of a
+// product that signs out when one closes could end the session
+const opened = [];
+// why the last screen could not be reached by its clicks
+let openFail = null;
 const fresh = async (s) => {
   if (ATTACH) {
     if (page) return;
-    page = signedInTab(browser, s?.url);
+    page = await signedInTab(browser, s?.url, ATTACH);
     if (!page) { console.error(`the window "${ATTACH}" has no tab open — sign in again with --keep-open ${ATTACH}`); process.exit(2); }
     ctx = page.context();
+    ctx.on('page', (p) => opened.push(p));
     await emulate(page, { width: W, height: H, deviceScaleFactor: 1, reducedMotion: 'reduce' });
-    if (blockedLists) blockedLists.push(await blockWrites(page, opt('--reads'), opt('--socket-reads')));
+    // the whole window's context, so a tab a press opens is read-only from its first request; the signed-in tab's
+    // current document gets the guard too (it was loaded before this run)
+    if (blockedLists) { blockedLists.push(await blockWrites(ctx, opt('--reads'), opt('--socket-reads'))); await page.evaluate(OUTLIVING_WRITES).catch(() => {}); }
+    // registered after the write block, so it runs first
+    if (NO_RELOAD) await page.route('**/*', (route) => {
+      const r = route.request();
+      if (r.isNavigationRequest() && r.frame() === page.mainFrame()) { heldNav = r.url(); return route.fulfill({ status: 204, body: '' }); }
+      return route.fallback();
+    });
     return;
   }
   if (ctx) await ctx.close().catch(() => {});
@@ -202,8 +235,36 @@ mkdirSync(join(P.spec, 'flows'), { recursive: true });
 // same waits, no press — and a press whose page ends exactly as the control's did changed nothing itself.
 // Load a screen in a fresh context: its URL, then its clicks (a screen of a single-URL product), each followed by a settle.
 const SIGNIN = /\/(log-?in|sign-?in|auth)\b/i;
+// One click of a screen's chain: the first VISIBLE match (a page can hold a hidden copy of its menu — a workspace tab
+// that is not shown — under the same id), and a click that fails says so instead of leaving the page where it was.
+const chainClick = async (sel) => {
+  const l = page.locator(sel).filter({ visible: true }).first();
+  if (!(await l.count().catch(() => 0))) { openFail = { selector: sel, why: 'nothing visible matches it' }; return false; }
+  try { await l.click({ timeout: 10000 }); } catch (e) { openFail = { selector: sel, why: clickFailure(e) }; return false; }
+  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(SETTLE);
+  return true;
+};
 const openScreen = async (s) => {
+  openFail = null;
   await fresh(s);
+  if (NO_RELOAD) {
+    // close what the last press opened, then the way back: --home, then the screen's own clicks
+    for (let i = 0; i < 2; i++) await page.keyboard.press('Escape').catch(() => {});
+    try { await dismiss(page, DISMISS); } catch (e) { console.error(e.message); process.exit(2); }
+    const chain = [...HOME, ...s.clicks];
+    if (!chain.length) return false; // nothing reaches it without a page load: capture it with --here and a --click chain, or pass --home
+    // signed out in place: the tab asks for a password, and the screen's own capture did not — checked before the way
+    // back (a signed-out page has no menu to click) and after it
+    const own = caps.find((k) => k.meta.screen === s.name);
+    const signedOut = async () => { if (!own?.meta.looksLikeSignIn && (await page.locator('input[type="password"]').filter({ visible: true }).count().catch(() => 0))) { console.error(`signed out: ${s.name ?? s.url} shows a password field — the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH}) and run again; flows.json was not written`); process.exit(3); } };
+    await signedOut();
+    heldNav = null;
+    for (const c of chain) if (!(await chainClick(c))) { await signedOut(); return false; }
+    if (heldNav) { openFail = { selector: chain.at(-1), why: `it would load another page (${new URL(heldNav).pathname})` }; heldNav = null; return false; }
+    await signedOut();
+    return true;
+  }
   await page.goto(s.url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(s.url, { waitUntil: 'domcontentloaded' }).catch(() => {}));
   if (await looksLikeBotCheck(page)) { console.error(`stopped at ${s.name ?? s.url}: ${BOT_CHECK_ADVICE}`); process.exit(3); }
   // a session that expired sends every screen to the sign-in page: stop, rather than record the screens as unreachable
@@ -213,13 +274,8 @@ const openScreen = async (s) => {
   const toSignIn = SIGNIN.test(landed) || (landed !== new URL(s.url).pathname && (await page.locator('input[type="password"]').count().catch(() => 0)) > 0);
   if (!SIGNIN.test(s.url) && toSignIn) { console.error(`session expired: ${s.name ?? s.url} opened the sign-in page (${landed}) — ${ATTACH ? `the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH})` : 'refresh the session file'} and run again; flows.json was not written`); process.exit(3); }
   await page.waitForTimeout(SETTLE);
-  for (const c of s.clicks) {
-    const l = page.locator(c).first();
-    if (!(await l.count().catch(() => 0))) return false;
-    await l.click({ timeout: 5000 }).catch(() => {});
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(SETTLE);
-  }
+  try { await dismiss(page, DISMISS); } catch (e) { console.error(e.message); process.exit(2); }
+  for (const c of s.clicks) if (!(await chainClick(c))) return false;
   return true;
 };
 
@@ -228,7 +284,10 @@ const landmarkOf = new Map();
 // A screen captured plainly (no --as-screen) counts too: its own heading is a landmark target (the landing view of a
 // product whose menu swaps the page in place IS one of its screens).
 const sharedNames = new Set(allScreens.filter((x) => x.shared).map((x) => x.name ?? x.url));
-for (const s of allScreens) { await openScreen(s); landmarkOf.set(s.name ?? s.url, (await page.evaluate(SNAP, LANDMARK)).landmark); }
+for (const s of allScreens) {
+  if (await openScreen(s)) landmarkOf.set(s.name ?? s.url, (await page.evaluate(SNAP, LANDMARK)).landmark);
+  else if (NO_RELOAD) { console.error(`${s.name ?? s.url}: its clicks do not reach it (${openFail?.selector}: ${openFail?.why}) — recapture it, or fix --home; flows.json was not written`); process.exit(4); }
+}
 {
   const dup = [...landmarkOf.entries()].filter(([k, m], i, a) => sharedNames.has(k) && a.findIndex(([, x]) => x === m) !== i);
   if (dup.length) console.log(`  warning: landmark "${LANDMARK ?? 'the main heading'}" does not tell these screens apart: ${dup.map(([k, m]) => `${k} ("${m}")`).join(', ')} — pass a --landmark that does`);
@@ -244,6 +303,7 @@ const judge = (c, url, origin) => {
   if (c.href && !c.href.startsWith('#')) { try { if (new URL(c.href, url).origin !== origin) return { skip: 'another origin' }; } catch { /* relative */ } }
   // In a data row the name carries the row's data ("Edit Create your first guide"): the verb is its first word.
   const verb = c.inData ? c.name.split(' ')[0] : c.name;
+  if (DENY_SELECTORS.has(c.selector)) return { refuse: { role: c.role, name: c.name, selector: c.selector, why: 'denied for this product (--deny-selector)' } };
   if (DENY && c.name && DENY.test(c.name)) return { refuse: { role: c.role, name: c.name, why: 'denied for this product (--deny)' } };
   if (REVEAL.test(verb) || REVEAL_ICON.test(c.icon)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'unmasks something the page hides' } };
   const risky = c.type === 'submit' || (c.inForm && c.role === 'button' && c.type !== 'button') || UNSAFE.test(verb) || (!c.name && UNSAFE.test(c.icon));
@@ -266,11 +326,26 @@ const effectOf = (before, after, id, own, origin) => {
     : after.textHash !== before.textHash || Math.abs(after.elements - before.elements) > 0 ? { kind: 'change', addedElements: after.elements - before.elements }
     : { kind: 'none' };
 };
+// --no-reload: a press whose page load was held is a navigation the mapper did not follow
+const heldEffect = () => {
+  if (!heldNav) return null;
+  const u = new URL(heldNav);
+  heldNav = null;
+  return { kind: 'navigate', to: u.pathname + u.search + u.hash, pattern: pattern(u.href), held: 'not followed: a page load would sign this product out (--no-reload)' };
+};
+// --no-reload: the screen cannot be reached again after a press. Nothing resets the page between presses, so the press
+// before changed it for good (another workspace tab, a collapsed menu): stop, and name it, rather than map the wrong
+// screen under this one's name.
+let lastPress = null;
+const lostWay = (s) => {
+  console.error(`stopped: after pressing ${lastPress ? `"${lastPress.name || lastPress.icon || ''}" (${lastPress.selector})` : 'the last control'}, ${s.name ?? s.url} can no longer be reached by its clicks (${openFail?.selector}: ${openFail?.why}). That press changed the page for good. Ask the designer to undo it in the window (or sign in again), then run again with --deny-selector '${lastPress?.selector ?? ''}'; a menu selector by its visible text also survives a hidden copy of the menu. flows.json was not written.`);
+  process.exit(4);
+};
 let shots = 0;
 for (const s of screensIn) {
   const url = s.url;
   const id = s.name ?? url;
-  if (!(await openScreen(s))) { console.log(`  ${id}: its clicks no longer reach it — recapture`); screens.push({ url, name: s.name, clicks: s.clicks, unreachable: true, transitions: [] }); continue; }
+  if (!(await openScreen(s))) { if (NO_RELOAD && lastPress) lostWay(s); console.log(`  ${id}: its clicks no longer reach it (${openFail?.selector}: ${openFail?.why}) — recapture`); screens.push({ url, name: s.name, clicks: s.clicks, unreachable: true, transitions: [] }); continue; }
   const origin = new URL(url).origin;
   const all = await page.evaluate(CONTROLS);
   const title = await page.evaluate(() => document.querySelector('h1')?.innerText?.trim() ?? document.title);
@@ -304,7 +379,7 @@ for (const s of screensIn) {
   // the control load: what the page does by itself between the moment a press is made and the moment its effect is read
   const control = {};
   if (todo.length) {
-    await openScreen(s);
+    if (!(await openScreen(s)) && NO_RELOAD) lostWay(s);
     control.before = await page.evaluate(SNAP, LANDMARK);
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(SETTLE);
@@ -314,21 +389,24 @@ for (const s of screensIn) {
   const settle = async () => { await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {}); await page.waitForTimeout(SETTLE); };
   // a selector that no longer matches (a generated id, a list re-ordered by the load) — the control by role and name
   const locate = async (c) => {
-    let loc = page.locator(c.selector).first();
+    let loc = page.locator(c.selector).filter({ visible: true }).first();
     if (!(await loc.count().catch(() => 0)) && c.name && c.role !== 'row') loc = page.getByRole(ROLE_OF[c.role] ?? c.role, { name: c.name, exact: true }).first();
     return (await loc.count().catch(() => 0)) ? loc : null;
   };
   const known = new Set(all.map((c) => c.selector));
   for (const c of todo) {
-    await openScreen(s);
-    const before = await page.evaluate(SNAP, LANDMARK);
     const ref = { role: c.role, name: c.name, selector: c.selector };
+    if (!(await openScreen(s))) { if (NO_RELOAD) lostWay(s); transitions.push({ control: ref, effect: { kind: 'unreachable', why: `the screen's clicks did not reach it this time (${openFail?.selector}: ${openFail?.why})` } }); continue; }
+    const before = await page.evaluate(SNAP, LANDMARK);
+    lastPress = { name: c.name, icon: c.icon, selector: c.selector };
+    const tabsBefore = opened.length;
     const loc = await locate(c);
     if (!loc) { transitions.push({ control: ref, effect: { kind: 'unreachable' } }); continue; }
     try { await loc.click({ timeout: 3000 }); } catch (e) { transitions.push({ control: ref, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
     await settle();
     const after = await page.evaluate(SNAP, LANDMARK);
-    const effect = effectOf(before, after, id, own, origin);
+    const effect = heldEffect() ?? effectOf(before, after, id, own, origin);
+    if (opened.length > tabsBefore) { const t2 = opened[tabsBefore]; await t2.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {}); effect.newTab = t2.url(); if (effect.kind === 'none') effect.kind = 'navigate'; }
     if (effect.kind === 'change' && control.changed && after.elements === control.after.elements && after.textHash === control.after.textHash) { effect.kind = 'none'; effect.ownChange = 'the page ends the same with no press (control load)'; delete effect.addedElements; }
     if (effect.kind !== 'none' && effect.kind !== 'navigate') { const f = `flows/${(s.name || new URL(url).pathname).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root'}--${++shots}.png`; await page.screenshot({ path: join(P.spec, f) }).catch(() => {}); effect.screenshot = f; }
     const t = { control: { ...ref, inData: c.inData, href: c.href, icon: c.icon || undefined }, effect };
@@ -344,7 +422,8 @@ for (const s of screensIn) {
         else if (!j.skip) safe.push(x);
       }
       for (const x of safe.slice(0, 12)) {
-        await openScreen(s);
+        if (!(await openScreen(s))) { if (NO_RELOAD) lostWay(s); t.inside.pressed.push({ role: x.role, name: x.name, effect: { kind: 'unreachable' } }); continue; }
+        lastPress = { name: x.name, icon: x.icon, selector: x.selector };
         const opener = await locate(c);
         if (opener) { await opener.click({ timeout: 3000 }).catch(() => {}); await settle(); }
         const b2 = await page.evaluate(SNAP, LANDMARK);
@@ -353,7 +432,7 @@ for (const s of screensIn) {
         if (!opener || !l2) { t.inside.pressed.push({ ...rec, effect: { kind: 'unreachable' } }); continue; }
         try { await l2.click({ timeout: 3000 }); } catch (e) { t.inside.pressed.push({ ...rec, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
         await settle();
-        t.inside.pressed.push({ ...rec, effect: effectOf(b2, await page.evaluate(SNAP, LANDMARK), id, own, origin) });
+        t.inside.pressed.push({ ...rec, effect: heldEffect() ?? effectOf(b2, await page.evaluate(SNAP, LANDMARK), id, own, origin) });
       }
       if (safe.length > 12) t.inside.notPressed = safe.length - 12;
     }
@@ -396,7 +475,7 @@ if (tabsOpen.length) {
   doc.uncapturedTabs = tabsOpen;
   console.log(`  tab panels no capture holds (${tabsOpen.length}): ${tabsOpen.slice(0, 12).map((t) => `${t.screen} \u203a ${t.tab}`).join(', ')} — capture each the flow needs, e.g. node scripts/${tabsOpen[0].command}`);
 }
-if (ATTACH) doc.window = { attached: ATTACH, note: 'mapped in the window the designer signed in in: one tab for every load, so state the product keeps in storage (the last tab, the last program) carries from one press to the next load' };
+if (ATTACH) doc.window = { attached: ATTACH, noReload: NO_RELOAD || undefined, home: HOME.length ? HOME : undefined, note: NO_RELOAD ? 'mapped in the window the designer signed in in, with no page load: each screen reached by --home and its own clicks, so state the page holds carries from one press to the next' : 'mapped in the window the designer signed in in: one tab for every load, so state the product keeps in storage (the last tab, the last program) carries from one press to the next load' };
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
 const sockLine = blockedLists ? socketSummary(...blockedLists) : null;

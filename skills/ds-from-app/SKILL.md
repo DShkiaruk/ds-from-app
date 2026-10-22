@@ -66,7 +66,8 @@ Never pass `--allow-writes` on a real product. Never pass `--interact` on a real
    become NEEDS-STATE unless the designer prepares the account so the state exists.
 3. `node scaffold.mjs init <repo> --product "<Name>" --url <url>`.
 4. Sign-in, when needed: [references/capture.md](references/capture.md) § Sign-in. A product that signs the designer out
-   when its tab closes: the same section, step 4 (one window for the whole run).
+   when its tab closes: the same section, step 4 (one window for the whole run); on every page load: step 5 (no page
+   load at all).
 
 ### 1 · Capture
 Follow [references/capture.md](references/capture.md) (screen names: by heading or menu label). End with a short report: screens captured, which did not open

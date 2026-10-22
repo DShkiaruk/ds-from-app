@@ -31,6 +31,7 @@ const MENU = '<!doctype html><html><head><meta charset="utf-8"><title>Menu</titl
 
 export async function startServer() {
   let posts = 0;
+  let memoryPrints = 0;
   const agents = [];
   let wsMessages = 0;
   const server = createServer((req, res) => {
@@ -50,6 +51,14 @@ export async function startServer() {
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }
     if (req.url.startsWith('/nothing-here')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body></body></html>'); return; }
     if (req.url.startsWith('/rows')) { res.end(ROWS); return; }
+    // a single-URL product whose sign-in lives only in the page's memory: any page load of its tab signs out (a reload,
+    // a link to another page). Its menu swaps the screen in place; "Print view" is a real page load; "Help" opens a tab;
+    // an unnamed "+" opens another workspace for good: the menu hides, a copy with other ids (m-orders_1) shows.
+    // "Rates" opens an in-app window over the whole page that Escape does not close, only its WindowClose image.
+    // its help opens in a tab of its own, which writes as soon as it loads (an analytics POST)
+    if (req.url.startsWith('/memory-app/help')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Help</title></head><body><h1>Help</h1><script>fetch("/memory-app/api/track",{method:"POST"}).catch(()=>{});</script></body></html>'); return; }
+    if (req.url.startsWith('/memory-app/print')) { memoryPrints++; res.end('<!doctype html><html><head><meta charset="utf-8"><title>Print</title></head><body><h1>Print view</h1></body></html>'); return; }
+    if (req.url.startsWith('/memory-app')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Memory app</title></head><body><nav id="nav" hidden><button type="button" id="m-orders" data-key="orders">Orders</button><button type="button" id="m-settings" data-key="settings">Settings</button><a id="print" href="/memory-app/print">Print view</a><button type="button" id="help">Help</button><button type="button" id="rates">Rates</button><div id="plus" style="cursor:pointer;display:inline-block;width:16px;height:16px;background:#ccc"></div></nav><main id="app"></main><script>let signedIn=false,screen="orders";const app=document.getElementById("app"),nav=document.getElementById("nav");function render(){if(!signedIn){nav.hidden=true;app.innerHTML=\'<h1>Welcome back</h1><input type="password" id="pw"><button type="button" id="enter">Continue</button>\';document.getElementById("enter").onclick=()=>{signedIn=true;render();};return;}nav.hidden=false;app.innerHTML=screen==="orders"?\'<h1>Orders</h1><button type="button" id="refresh">Refresh</button><p id="t">2 orders</p>\':\'<h1>Settings</h1><p>Plain settings</p>\';const r=document.getElementById("refresh");if(r)r.onclick=()=>{document.getElementById("t").textContent="Refreshed";};}document.querySelectorAll("[data-key]").forEach((b)=>{b.onclick=()=>{screen=b.dataset.key;render();};});document.getElementById("help").onclick=()=>window.open("/memory-app/help");document.getElementById("rates").onclick=()=>{const w=document.createElement("div");w.id="ratesWin";w.style.cssText="position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:10";w.innerHTML=\'<p>Edit rates</p><img class="wclose" alt="" src="/memory-app/WindowClose.png" style="cursor:pointer;width:11px;height:11px;display:block;background:#999">\';document.body.append(w);w.querySelector(".wclose").onclick=()=>w.remove();};document.getElementById("plus").onclick=()=>{const c=nav.cloneNode(true);c.querySelectorAll("[id]").forEach((e)=>{e.id+="_1";});nav.style.display="none";nav.after(c);c.querySelectorAll("[data-key]").forEach((b)=>{b.onclick=()=>{screen=b.dataset.key;render();};});};render();</script></body></html>'); return; }
     // a product that signs out when its tab closes: a pagehide beacon and a keepalive POST, as such products send them
     if (req.url.startsWith('/bye')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Bye</title></head><body><main><h1>Account</h1><button type="button" id="more">More</button><p id="t">Details</p></main><script>document.getElementById("more").onclick=()=>{document.getElementById("t").textContent="More details";};addEventListener("pagehide",()=>{navigator.sendBeacon("/bye/api/sign-out");fetch("/bye/api/tab-closed",{method:"POST",keepalive:true}).catch(()=>{});});</script></body></html>'); return; }
     if (req.url.startsWith('/actions')) { res.end(actionsHtml); return; }
@@ -78,5 +87,5 @@ export async function startServer() {
   });
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   html = htmlTemplate.replaceAll('__XORIGIN__', `http://localhost:${server.address().port}`);
-  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close(), posts: () => posts, agents: () => agents.slice(), resetAgents: () => { agents.length = 0; }, resetPosts: () => { posts = 0; }, wsMessages: () => wsMessages, resetWs: () => { wsMessages = 0; } };
+  return { url: `http://127.0.0.1:${server.address().port}/`, close: () => server.close(), posts: () => posts, memoryPrints: () => memoryPrints, agents: () => agents.slice(), resetAgents: () => { agents.length = 0; }, resetPosts: () => { posts = 0; }, wsMessages: () => wsMessages, resetWs: () => { wsMessages = 0; } };
 }

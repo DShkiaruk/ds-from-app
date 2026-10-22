@@ -13,7 +13,7 @@
 // it and every tool that disconnects from it; the next run finds the same tab with its sessionStorage; a route set by
 // one run is gone in the next; Playwright's fullPage screenshot resizes an attached page to the window's own size, so
 // the whole-page screenshot here goes through CDP at the capture's size and scale.
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, chmodSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -35,7 +35,7 @@ export async function connectWindow(name) {
   const port = portOf(windowDir(name));
   if (!port) return null;
   const chromium = await playwright();
-  try { return await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 5000 }); } catch { return null; }
+  try { return await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 15000 }); } catch { return null; }
 }
 
 /** Open the window at `url` (or connect to it, when it is open already). */
@@ -70,18 +70,44 @@ export async function closeWindow(name) {
     const s = await browser.newBrowserCDPSession().catch(() => null);
     await s?.send('Browser.close').catch(() => {});
   }
-  // a window that answered but did not close: stopped by the PID this module started it with (never by name; and only
-  // when it answered just now, so a PID the system has since given to another program is never touched)
+  // A window that did not close, or did not answer: stopped by the PID this module started it with — never by name,
+  // and only while that PID's own command line holds this window's folder, so a PID the system has since given to
+  // another program is never touched. (A window that did not answer used to stay open with its folder deleted.)
   const pid = Number(existsSync(join(dir, 'pid')) ? readFileSync(join(dir, 'pid'), 'utf8') : 0);
-  for (let i = 0; i < 50 && browser && pid && alive(pid); i++) await sleep(100);
-  if (browser && pid && alive(pid)) { try { process.kill(pid); } catch { /* gone */ } await sleep(500); }
+  const ours = () => { try { return execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8' }).includes(`--user-data-dir=${dir}`); } catch { return false; } };
+  for (let i = 0; i < 50 && pid && alive(pid) && ours(); i++) await sleep(100);
+  if (pid && alive(pid) && ours()) { try { process.kill(pid); } catch { /* gone */ } for (let i = 0; i < 30 && alive(pid); i++) await sleep(100); }
+  // Chrome's last writes (the profile's Default folder, crash breadcrumbs) can land after its main process is gone and
+  // re-create the folder: deleted, then once more after a pause (seen in the selftests, 2026-10-22)
+  rmSync(dir, { recursive: true, force: true });
+  await sleep(1500);
   rmSync(dir, { recursive: true, force: true });
   return Boolean(browser);
 }
 
-/** The tab the designer signed in in: the first on the product's origin, else the first tab. */
-export function signedInTab(browser, url) {
+const targetId = async (page) => {
+  const s = await page.context().newCDPSession(page).catch(() => null);
+  const id = (await s?.send('Target.getTargetInfo').catch(() => null))?.targetInfo?.targetId ?? null;
+  await s?.detach().catch(() => {});
+  return id;
+};
+
+/** Remember the tab the designer signed in in (sign-in mode): a tab the product opens later (its help, on the same
+ * origin) must not be taken for it — found on the first designer's product, whose help icon opens one. */
+export async function rememberTab(name, page) {
+  const id = await targetId(page);
+  if (id) writeFileSync(join(windowDir(name), 'tab'), id, { mode: 0o600 });
+}
+
+/** The tab the designer signed in in: the one sign-in mode remembered; else the first on the product's origin, else the
+ * first tab. */
+export async function signedInTab(browser, url, name) {
   const pages = browser.contexts()[0]?.pages() ?? [];
+  const file = name ? join(windowDir(name), 'tab') : null;
+  if (file && existsSync(file)) {
+    const want = readFileSync(file, 'utf8').trim();
+    for (const p of pages) if ((await targetId(p)) === want) return p;
+  }
   let origin = null;
   try { origin = new URL(url).origin; } catch { /* no url */ }
   const on = (p) => { try { return new URL(p.url()).origin === origin; } catch { return false; } };

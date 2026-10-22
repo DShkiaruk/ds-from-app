@@ -52,6 +52,26 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
    remembers carries over (flows.json says so under `window`). When the captures and flows are done, before the
    checkpoint: `node capture.mjs --close <slug>` (it deletes the window's profile folder, which held the sign-in). A
    window the designer closed: sign in again with `--keep-open`.
+5. **A product that signs out on every page load** — a reload or a link to another page signs the designer out, so a
+   capture with `--attach` alone lands on the sign-in page (it loads the screen's address first). Work with no page
+   load at all. Every capture takes `--attach <slug> --here --click '<menu item>' … --as-screen`: it starts from the tab
+   as it is, so begin each chain with a menu item that works from any screen (a chain that starts elsewhere depends on
+   what the tab shows). Then `node flows.mjs <repo> --attach <slug> --no-reload --home '<menu item>'`: it returns to
+   each screen by `--home` and the screen's clicks. In both, a click that would load another page is held (nothing
+   reaches the server, the tab keeps its page): `capture.mjs` refuses it, `flows.mjs` records it as a `held`
+   navigation. Both stop with exit 3 when the tab asks for a password. Nothing resets the page between presses, so a
+   press that changes it for good (an unnamed "+" that opens another workspace tab with its own copy of the menu)
+   breaks the way back: `flows.mjs` stops (exit 4) and names it. Ask the designer to undo it in the window, then run
+   again with `--deny-selector '<the selector it printed>'`. Clicks take the first visible match, so a selector that
+   also matches the menu's copy (`[id^="MenuOrders"]`, or by the item's text) survives one.
+   What a press leaves over the page that Escape does not close (an in-app window, a message), and a view a module
+   remembers (a list that hides its start page), take `--dismiss '<its own close or back control>'` (repeatable;
+   clicked whenever visible, before the clicks in `capture.mjs`, before every way back in `flows.mjs`). A failed click
+   names the layer that took it (`<div id=…> intercepts pointer events`): look at it and dismiss it. A product that
+   reports "a connection problem" when a blocked write fails shows its message after many presses: dismiss its OK, and
+   say in your report that the message comes from the write block, not from the product. `--dismiss-late` closes a
+   message that comes after the clicks, before the screenshot (never the surface the clicks opened). Wait long enough
+   for a form that loads (`--settle 3000`): a capture of "Loading…" is not the state.
 
 ## Which screens
 1. Capture the entry screen.

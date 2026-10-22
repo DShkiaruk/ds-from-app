@@ -124,3 +124,30 @@ export function platformSummary(...lists) {
   const n = lists.filter(Boolean).reduce((k, l) => k + (l.platformChecks || 0), 0);
   return n ? `hosting checks let through: ${n} (the platform's bot check, Vercel / Cloudflare: it changes no product data; a page that stays a challenge means the platform refused the browser — tell the designer)` : null;
 }
+
+// Why a click did not happen, in one line: the layer that took it ("<div id=…> intercepts pointer events"), else the
+// first line of the error. Found on a product whose in-app window, left open by an earlier press, covered its menu.
+export function clickFailure(e) {
+  const lines = String(e?.message ?? e).replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+  const over = lines.find((l) => /intercepts pointer events/.test(l));
+  return over ? over.trim().replace(/^-\s*/, '').slice(0, 220) : lines[0].slice(0, 160);
+}
+
+// --dismiss '<selector>' (repeatable): close what a product leaves over the page (an in-app window Escape does not
+// close, a late "connection problem" message) by its own close control, whenever one is visible. Each match is
+// judged like any click: a control whose name reads like an action on data is refused, not pressed.
+export async function dismiss(page, selectors, settle = 400) {
+  let n = 0;
+  for (let round = 0; round < 6 && selectors.length; round++) {
+    let hit = null;
+    for (const sel of selectors) { const l = page.locator(sel).filter({ visible: true }).first(); if (await l.count().catch(() => 0)) { hit = l; break; } }
+    if (!hit) break;
+    const name = await hit.evaluate((el) => (el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().slice(0, 60)).catch(() => '');
+    if (UNSAFE.test(name) || REVEAL.test(name)) throw new Error(`--dismiss: refused — "${name}" could change data or unmask something; dismiss by the window's close control instead`);
+    try { await hit.click({ timeout: 5000 }); } catch { break; }
+    n++;
+    await page.waitForTimeout(settle);
+  }
+  return n;
+}
+

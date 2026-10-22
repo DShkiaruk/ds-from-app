@@ -1,5 +1,48 @@
 # Changes
 
+## 0.2.5 — 2026-10-22
+
+From the first designer's run, on a single-URL product that signs out on every page load of its tab, a reload
+included, so 0.2.4's one window still failed: `capture.mjs --attach` loads the screen's address first.
+- **No page load at all.** `capture.mjs --attach <slug> --here` captures from the tab as it is, by its `--click` chain
+  (start it with a menu item); `flows.mjs <repo> --attach <slug> --no-reload --home '<selector>'` returns to each
+  screen by `--home` and the screen's clicks instead of reloading. A click that would load another page is held: the
+  page load is answered 204, so the browser keeps its page and nothing reaches the server; `capture.mjs` refuses it,
+  `flows.mjs` records a `held` navigation. Both stop (exit 3) when the tab asks for a password. A fixture whose sign-in
+  lives only in the page's memory: two captures, a refused page load and a whole map, still signed in at the end.
+- **Found on the live product, the same day, and fixed before release:**
+  - A click of a screen's chain that failed (the element hidden: the page held a hidden copy of its menu under the
+    same id) was ignored, so `flows.mjs` mapped the screen the tab was left on under another screen's name. Chain
+    clicks now take the first visible match and a failed one says so; a screen its clicks do not reach is not mapped.
+  - With no page load nothing resets the page, so one press can break the way back for every press after it (an
+    unnamed "+" opened a second workspace tab with its own menu). `flows.mjs --no-reload` stops (exit 4) and names that
+    press; `--deny-selector '<selector>'` refuses a control that has no name to deny.
+  - A tab the product opens (its help) was outside the write block, which covered the signed-in tab only. Attached
+    runs block writes in the whole window, and a press that opens a tab is recorded with it (`newTab`), the tab left
+    open.
+  - The next run took the first tab on the product's origin, which was now that help tab. Sign-in mode remembers
+    its tab (`~/.ds-from-app/windows/<slug>/tab`).
+  - An in-app window that Escape does not close (opened by a press in the top bar) and a "connection problem"
+    message (the product's answer to a blocked analytics write) covered the menu. `--dismiss '<selector>'` closes
+    them by their own control, whenever visible (before the clicks; before every way back); `--dismiss-late` before
+    the screenshot. A failed click names the layer that took it.
+  - An unnamed control whose only name is its class (`<div class="add-new-tab-button">`) is judged by that class.
+  - Checked end to end on that product, in the window signed in by hand: two screens, a whole map of one, the
+    product's create form and one type chosen in it, and the sign-in alive at the end.
+  - `capture.mjs --close` deleted the profile folder of a window that did not answer and left its Chrome running
+    (seen in the selftests: test windows open for over an hour). It now stops such a window by the PID it was started
+    with, only while that PID's command line holds the window's folder, and deletes the folder again after Chrome's
+    last writes.
+- `npm run selftest` gives every test five minutes: a test that hangs fails instead of holding the whole run. The
+  window tests close every window they open, also after a failure.
+- **An unnamed clickable picture is named by its file** (`<img src="…/signout.svg">` → `signout`), so `flows.mjs`
+  refuses a log-out drawn as a picture; it pressed one on that product. A patch from the designer's run.
+- **The app's own font files are kept** (`extraction/assets/fonts/`, fetched from the page's origin with a GET) and the
+  Workbench's fonts.css loads the copies: the product's server refuses its fonts to another origin, so Storybook and
+  the prototype measured text in a fallback face, 1–3 px off. A patch from the designer's run. The copies live in the
+  Workbench repository, which stays private; a font's licence may not allow using it outside the product: say so at
+  handoff.
+
 ## 0.2.4 — 2026-10-21
 
 Found by the first designer's run: a product that signs her out each time its tab closes.

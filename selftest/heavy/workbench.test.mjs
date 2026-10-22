@@ -102,7 +102,9 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     assert.match(fontsCss, /src: url\("\.\.\/\.\.\/extraction\/assets\/fonts\/fixture\.woff2"\)/, `fonts.css loads the kept font file:\n${fontsCss}`);
 
     // 4. install
-    r = await sh('npm', ['install', '--no-audit', '--no-fund', '--prefer-offline'], repo);
+    // no --prefer-offline: a stale npm cache resolves rollup's platform binary to nothing, silently (npm/cli#4828;
+    // measured 2026-10-22 with rollup 4.64.12), and every Storybook and Vite step then fails to start
+    r = await sh('npm', ['install', '--no-audit', '--no-fund'], repo);
     assert.equal(r.status, 0, `npm install:\n${r.out.slice(-4000)}`);
 
     const npm = (script) => sh('npm', ['run', '-s', script], repo);

@@ -64,6 +64,7 @@ test('a single-URL product: screens by landmark, refusals, and the write block',
       [refusedOn('settings').some((r) => r.name === 'Show' && /unmask/.test(r.why)), 'a "Show" button beside a secret is refused, not pressed'],
       [refusedOn('settings').some((r) => !r.name && r.icon === 'delete'), 'an unnamed icon button drawing a trash can is refused by its icon'],
       [refusedOn('settings').some((r) => !r.name && r.icon === 'trash-2'), 'an unnamed icon button drawing a Lucide trash-2 is refused by its icon'],
+      [refusedOn('settings').some((r) => !r.name && r.icon === 'add-new-tab-button'), 'an unnamed control whose only name is its class (add-new-tab-button) is refused by it'],
       [refusedOn('settings').some((r) => !r.name && r.icon === 'signout'), 'an unnamed clickable <img src="…/signout.svg"> is refused by its file name (pressing it ended a real product\'s session)'],
       [!/sk_live_PLANTED/.test(raw), 'the secret appears nowhere in flows.json'],
     ]);

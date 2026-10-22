@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 \"tests/*.test.mjs\"",
-    "selftest": "node --test --test-concurrency=1 \"selftest/*.test.mjs\"",
+    "selftest": "node --test --test-concurrency=1 --test-timeout=300000 \"selftest/*.test.mjs\"",
     "selftest:workbench": "node --test --test-concurrency=1 selftest/heavy/workbench.test.mjs",
     "check": "npm test && npm run selftest"
   },

@@ -32,10 +32,10 @@
  */
 
 import { launch, headlessFor } from './lib/browser.mjs';
-import { openWindow, connectWindow, closeWindow, signedInTab, lockWindow, emulate, fullShot } from './lib/window.mjs';
+import { openWindow, connectWindow, closeWindow, signedInTab, rememberTab, lockWindow, emulate, fullShot } from './lib/window.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { UNSAFE, REVEAL, REVEAL_ICON, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
 
 // ── properties we read. Fixed on purpose: a capture whose property list drifts
@@ -103,6 +103,15 @@ function args(argv) {
     else if (a === '--keep-open') o.keepOpen = next();
     else if (a === '--attach') o.attach = next();
     else if (a === '--close') o.close = next();
+    // With --attach: no page load at all. The capture starts from the tab as it is and reaches the surface by its
+    // --click chain; a click that would load another page is held (a product that signs out on every page load).
+    else if (a === '--here') o.here = true;
+    // what the product leaves over the page, closed by its own close control whenever one is visible (lib/safety.mjs
+    // dismiss), repeatable: --dismiss before the clicks (a window an earlier run left open, a back button to the
+    // screen's start); --dismiss-late before the screenshot (a message that comes late, over the surface) — never the
+    // surface the clicks opened, so it is a flag of its own.
+    else if (a === '--dismiss') (o.dismiss ||= []).push(next());
+    else if (a === '--dismiss-late') (o.dismissLate ||= []).push(next());
     else if (a === '--max-state-samples') o.maxStateSamples = Number(next());
     else if (a === '--settle') o.settle = Number(next());
     else if (a === '--motion') o.reducedMotion = false;   // opt OUT of reduced motion
@@ -608,7 +617,8 @@ if (o.close) {
   console.log(was ? `the window "${o.close}" is closed; its profile folder (it held the sign-in) is deleted` : `no window "${o.close}" was open; its folder is deleted, if there was one`);
   process.exit(0);
 }
-if (!o.url && !o.loginUrl) {
+if (o.here && !o.attach) { console.error('refused: --here works in an attached window: pass --attach <slug>'); process.exit(2); }
+if (!o.url && !o.loginUrl && !o.here) {
   console.error('usage: node scripts/capture.mjs --url <URL> [--screen name] [--out dir] [--viewport WxH] [--scheme light|dark] [--storage auth.json | --attach <window>]');
   process.exit(2);
 }
@@ -633,7 +643,7 @@ try {
     if (!browser) { console.error(`no open window "${o.attach}" — it was closed, or never opened. Sign in again: capture.mjs --login-url <sign-in url> --until-url '<regex>' --keep-open ${o.attach}`); process.exit(2); }
     lockWindow(o.attach);
     context = browser.contexts()[0];
-    attachedTab = signedInTab(browser, o.url);
+    attachedTab = await signedInTab(browser, o.url, o.attach);
     if (!attachedTab) { console.error(`the window "${o.attach}" has no tab open — sign in again with --keep-open ${o.attach}`); await browser.close(); process.exit(2); }
   } else if (o.keepOpen) {
     ({ browser } = await openWindow(o.keepOpen, o.loginUrl));
@@ -652,7 +662,10 @@ try {
 // sessionStorage is not part of storageState: restore it from the session file (lib/session.mjs). An attached window
 // has its own.
 const restoredSession = o.attach || o.keepOpen ? 0 : await restoreSession(context, o.storage);
-const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(attachedTab ?? context, o.reads, o.socketReads) : null;
+// An attached window: the whole context, so a tab the product opens is read-only from its first request, and the
+// guard goes into the signed-in tab's current document too (it was loaded before this run).
+const blockedWrites = o.blockWrites && !o.loginUrl ? await blockWrites(context, o.reads, o.socketReads) : null;
+if (blockedWrites && attachedTab) await attachedTab.evaluate(OUTLIVING_WRITES).catch(() => {});
 
 // login mode: open the page, let a human sign in, then persist the session.
 if (o.loginUrl) {
@@ -696,6 +709,7 @@ if (o.loginUrl) {
     const browserBound = kept.filter((c) => c.expires === -1).length;
     console.log(`signed in — the window "${o.keepOpen}" stays open. Every capture and flows.mjs run takes --attach ${o.keepOpen} and works in its tab. The designer leaves the window open and does not click in it while the tools work. Close it at the end: capture.mjs --close ${o.keepOpen}.`);
     console.log(`  the sign-in: ${kept.length} cookie(s) of ${host}, ${browserBound} of them end with the browser · ${session.length} sessionStorage item(s) · sockets the page opened: ${sockets.size ? [...sockets].join(', ') : 'none seen'}`);
+    await rememberTab(o.keepOpen, at);
     await browser.close(); // an attached window: this disconnects, the window stays
     process.exit(0);
   }
@@ -714,39 +728,65 @@ if (o.loginUrl) {
 const page = attachedTab ?? await context.newPage();
 // an attached window: the size, scale, scheme and motion of a fresh context, for this connection only
 const attachedCdp = attachedTab ? await emulate(page, { width: W, height: H, deviceScaleFactor: 2, colorScheme: o.scheme, reducedMotion: o.reducedMotion ? 'reduce' : 'no-preference' }) : null;
+// --here: a page load of the main frame is answered 204 (the browser keeps the page it has, nothing reaches the
+// server) and remembered, so a click that would reload is reported, not followed. Registered after the write block,
+// so it runs first (Playwright runs the last route registered first).
+let heldNav = null;
+if (o.here) {
+  await page.route('**/*', (route) => {
+    const r = route.request();
+    if (r.isNavigationRequest() && r.frame() === page.mainFrame()) { heldNav = r.url(); return route.fulfill({ status: 204, body: '' }); }
+    return route.fallback();
+  });
+  if (await page.locator('input[type="password"]').count().catch(() => 0)) {
+    console.error(`the window "${o.attach}" is signed out (its tab asks for a password) — sign in again in it: capture.mjs --login-url … --keep-open ${o.attach}`);
+    await browser.close(); process.exit(3);
+  }
+  if (o.url) {
+    const want = new URL(o.url), got = new URL(page.url());
+    if (want.origin + want.pathname !== got.origin + got.pathname) { console.error(`--here: the tab is at ${got.pathname}, not ${want.pathname} — with --here the capture starts from the tab as it is`); await browser.close(); process.exit(2); }
+  }
+  o.url = page.url();
+}
 const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); });
 
-let nav;
-try {
-  nav = await page.goto(o.url, { waitUntil: 'networkidle', timeout: 45000 });
-} catch {
-  try { nav = await page.goto(o.url, { waitUntil: 'domcontentloaded', timeout: 45000 }); }
-  catch (e) { console.error(`navigation failed: ${e}`); await browser.close(); process.exit(2); }
-}
-await page.waitForTimeout(o.settle);
-// A redirect means the screen asked for is not the screen captured: /projects/new that lands on /dashboard would be
-// written as "project-new" holding the dashboard, and counted twice. Refused unless --allow-redirect.
-{
-  const want = new URL(o.url), got = new URL(page.url());
-  if (want.origin + want.pathname.replace(/\/$/, '') !== got.origin + got.pathname.replace(/\/$/, '') && !o.allowRedirect) {
-    console.error(`redirected: asked for ${want.pathname}, landed on ${got.pathname} — nothing written. The screen was not reached (a GAPS row), or capture ${got.pathname} under its own name; --allow-redirect to keep it.`);
-    await browser.close(); process.exit(4);
+let nav = null;
+if (!o.here) {
+  try {
+    nav = await page.goto(o.url, { waitUntil: 'networkidle', timeout: 45000 });
+  } catch {
+    try { nav = await page.goto(o.url, { waitUntil: 'domcontentloaded', timeout: 45000 }); }
+    catch (e) { console.error(`navigation failed: ${e}`); await browser.close(); process.exit(2); }
+  }
+  await page.waitForTimeout(o.settle);
+  // A redirect means the screen asked for is not the screen captured: /projects/new that lands on /dashboard would be
+  // written as "project-new" holding the dashboard, and counted twice. Refused unless --allow-redirect.
+  {
+    const want = new URL(o.url), got = new URL(page.url());
+    if (want.origin + want.pathname.replace(/\/$/, '') !== got.origin + got.pathname.replace(/\/$/, '') && !o.allowRedirect) {
+      console.error(`redirected: asked for ${want.pathname}, landed on ${got.pathname} — nothing written. The screen was not reached (a GAPS row), or capture ${got.pathname} under its own name; --allow-redirect to keep it.`);
+      await browser.close(); process.exit(4);
+    }
   }
 }
+const dismissed = { before: 0, beforeShot: 0 };
+try { dismissed.before = await dismiss(page, o.dismiss || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
 const clicked = [];
 for (const sel of o.clicks || []) {
-  const el = page.locator(sel).first();
-  if (!(await el.count())) { console.error(`--click ${sel}: nothing matches — the surface behind it was not reached`); await browser.close(); process.exit(2); }
+  // the first VISIBLE match: a page can hold a hidden copy of its menu (a workspace tab not shown) under the same id
+  const el = page.locator(sel).filter({ visible: true }).first();
+  if (!(await el.count())) { console.error(`--click ${sel}: nothing visible matches — the surface behind it was not reached`); await browser.close(); process.exit(2); }
   const info = await el.evaluate((n) => ({ type: n.getAttribute('type'), inForm: Boolean(n.closest('form')), text: (n.innerText || n.getAttribute('aria-label') || '').trim().slice(0, 80), tag: n.tagName.toLowerCase(), icon: n.querySelector('[data-icon]')?.getAttribute('data-icon') || '' }));
   if ((REVEAL.test(info.text) || REVEAL_ICON.test(info.icon)) && !o.allowReveal) { console.error(`--click ${sel}: refused — "${info.text || info.icon}" unmasks something the page hides; the capture and its screenshot would hold it. --allow-reveal only on a product with nothing secret behind it.`); await browser.close(); process.exit(2); }
   const unsafe = info.type === 'submit' || (info.inForm && info.tag === 'button' && info.type !== 'button') || UNSAFE.test(info.text) || (!info.text && UNSAFE.test(info.icon)); // the icon is the verb only of an unnamed control (a menu item "Product Modules" draws appstore-add)
   if (unsafe && !o.allowUnsafeClick) { console.error(`--click ${sel}: refused — "${info.text}" (${info.tag}${info.type ? ` type=${info.type}` : ''}${info.inForm ? ', inside a form' : ''}) could change the product. Open the surface another way, or pass --allow-unsafe-click on a product you may change.`); await browser.close(); process.exit(2); }
   const before = page.url();
-  await el.click();
+  try { await el.click({ timeout: 15000 }); } catch (e) { console.error(`--click ${sel}: the click did not happen — ${clickFailure(e)}. Close what covers it (--dismiss '<its close control>'), or reach the surface another way.`); await browser.close(); process.exit(2); }
   // a click can load data (a program switch, a tab that fetches its widgets): wait for the network, then settle
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(Math.min(o.settle, 800));
+  if (heldNav) { console.error(`--click ${sel}: it would load another page (${new URL(heldNav).pathname}) — held: in --here mode a page load would sign this product out. Reach the surface another way.`); await browser.close(); process.exit(2); }
   clicked.push({ selector: sel, text: info.text, urlBefore: before, urlAfter: page.url() });
 }
 if (o.rootClass || o.rootAttr) {
@@ -824,6 +864,7 @@ for (const f of fontFiles) {
   writeFileSync(join(dir, name), Buffer.from(f.base64, 'base64'));
   for (const face of walk.fontFacesDeclared || []) if ((face.src || '').includes(f.url)) face.file = `assets/fonts/${name}`;
 }
+try { dismissed.beforeShot = await dismiss(page, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
 const shot = join(o.out, `${screen}--${o.viewport}--${o.scheme}.png`);
 
 // The baseline screenshot is taken HERE — immediately after the walk and BEFORE any
@@ -865,6 +906,9 @@ const capture = {
     sessionStorageRestored: restoredSession || undefined,
     // captured in the window the designer signed in in (--attach), not in a fresh browser with a saved session
     window: o.attach || undefined,
+    // no page load (--here): the tab as it was, then the clicks
+    noReload: o.here || undefined,
+    dismissed: dismissed.before || dismissed.beforeShot ? dismissed : undefined,
     blockedWrites: blockedWrites ? blockedWrites.map((b) => `${b.method} ${new URL(b.url).pathname}`) : undefined,
     readsAllowed: o.blockWrites ? o.reads ?? null : undefined,
     socketReadsAllowed: o.blockWrites ? o.socketReads ?? null : undefined,
