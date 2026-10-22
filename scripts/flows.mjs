@@ -88,10 +88,14 @@ const CONTROLS = (inner) => {
   const out = [];
   const seen = new Set();
   const cssPath = (el) => { const parts = []; let n = el; while (n && n.nodeType === 1 && parts.length < 10) { let p = n.tagName.toLowerCase(); if (n.id && !/^(base-ui|radix|headlessui|:r|rc_|rc-)|uuid|\d{4,}/.test(n.id)) { parts.unshift(`${p}#${CSS.escape(n.id)}`); break; } const sib = [...(n.parentElement?.children || [])].filter((c) => c.tagName === n.tagName); if (sib.length > 1) p += `:nth-of-type(${sib.indexOf(n) + 1})`; parts.unshift(p); n = n.parentElement; } return parts.join('>'); };
+  // an icon drawn as a picture (<img src=".../signout.svg">): its file name is its icon — found on the first designer's
+  // product, whose top-bar log-out is an unnamed clickable <img> that no class names
+  const imgIcon = (el) => { const img = el.tagName === 'IMG' ? el : el.querySelector('img'); const src = img?.getAttribute('src') || ''; const f = src.split(/[?#]/)[0].split('/').pop() || ''; return (img?.getAttribute('alt') || '').trim() ? '' : f.replace(/\.(svg|png|gif|jpe?g|webp)$/i, ''); };
   const iconOf = (el) => {
     const d = el.querySelector('[data-icon]')?.getAttribute('data-icon'); if (d) return d;
     const svg = el.querySelector('svg'); const cls = (svg?.getAttribute('class') || '') + ' ' + (el.querySelector('[class*="icon-"], [class*="anticon-"]')?.getAttribute('class') || '');
-    const m = cls.match(/(?:lucide-|anticon-|icon-|tabler-icon-|heroicon-)([a-z0-9-]+)/i); return m ? m[1] : '';
+    const m = cls.match(/(?:lucide-|anticon-|icon-|tabler-icon-|heroicon-)([a-z0-9-]+)/i); if (m) return m[1];
+    return imgIcon(el);
   };
   // inner: only what sits inside an opened layer (a menu, a dialog, a drawer), option rows included
   const layers = inner ? [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], [popover], dialog[open], [data-state="open"]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }) : [document];
@@ -119,6 +123,9 @@ const CONTROLS = (inner) => {
 const UNPRESSED = () => {
   const ctl = 'a[href], button, input, select, textarea, summary, label, [role="button"], [role="tab"], [role="menuitem"], [role="link"], [role="switch"], [role="checkbox"], [role="combobox"], [aria-haspopup], [aria-expanded]';
   const cssPath = (el) => { const parts = []; let n = el; while (n && n.nodeType === 1 && parts.length < 10) { let p = n.tagName.toLowerCase(); if (n.id && !/^(base-ui|radix|headlessui|:r|rc_|rc-)|uuid|\d{4,}/.test(n.id)) { parts.unshift(`${p}#${CSS.escape(n.id)}`); break; } const sib = [...(n.parentElement?.children || [])].filter((c) => c.tagName === n.tagName); if (sib.length > 1) p += `:nth-of-type(${sib.indexOf(n) + 1})`; parts.unshift(p); n = n.parentElement; } return parts.join('>'); };
+  // an icon drawn as a picture (<img src=".../signout.svg">): its file name is its icon — found on the first designer's
+  // product, whose top-bar log-out is an unnamed clickable <img> that no class names
+  const imgIcon = (el) => { const img = el.tagName === 'IMG' ? el : el.querySelector('img'); const src = img?.getAttribute('src') || ''; const f = src.split(/[?#]/)[0].split('/').pop() || ''; return (img?.getAttribute('alt') || '').trim() ? '' : f.replace(/\.(svg|png|gif|jpe?g|webp)$/i, ''); };
   const out = [];
   const taken = new Set();
   for (const el of document.querySelectorAll('body *')) {
@@ -132,7 +139,8 @@ const UNPRESSED = () => {
     taken.add(el);
     const sibs = [...(el.parentElement?.children || [])].filter((c) => c.tagName === el.tagName && c.className === el.className);
     if (sibs[0] !== el) continue;
-    out.push({ text: (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80), selector: cssPath(el), group: sibs.length });
+    const text = (el.innerText || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+    out.push({ text, selector: cssPath(el), group: sibs.length, icon: text ? '' : imgIcon(el) });
   }
   return out;
 };
@@ -285,7 +293,7 @@ for (const s of screensIn) {
   // Clickable rows (not controls): one representative per group, under the same name checks. A row's name is data, so
   // the check is on the whole text (over-refusing a row is listed, not silent).
   for (const r of rows) {
-    const c = { role: 'row', name: r.text, selector: r.selector, group: r.group, type: null, href: null, icon: '', inForm: false, inData: false, disabled: false };
+    const c = { role: 'row', name: r.text, selector: r.selector, group: r.group, type: null, href: null, icon: r.icon || '', inForm: false, inData: false, disabled: false };
     const j = judge(c, url, origin);
     if (j.refuse) { refused.push(j.refuse); unpressed.push({ text: r.text, selector: r.selector, why: j.refuse.why }); continue; }
     if (j.allowed) allowed.push({ role: 'row', name: c.name });

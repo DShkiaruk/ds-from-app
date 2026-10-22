@@ -1,7 +1,8 @@
 <!doctype html>
 <!-- A synthetic single-URL product for the shared-URL self-test. Every screen lives at ONE URL and the menu swaps the
      page in place; the sign-in is a sessionStorage flag (no flag: a "Sign in" page); the Settings screen holds a
-     masked secret with a "Show" button that unmasks it, and two unnamed trash-can buttons (an Ant Design data-icon and a Lucide class) that delete a row. The menu
+     masked secret with a "Show" button that unmasks it, and two unnamed trash-can buttons (an Ant Design data-icon and a Lucide class) that delete a row, and an unnamed
+     clickable <img src="…/signout.svg"> that signs out (a log-out drawn as a picture, as on a real product's top bar). The menu
      item "Order history" carries a word the unsafe list knows. With ?proto=1 the same page is its own "prototype":
      each screen has a hash route (#/orders, #/settings) and the menu navigates to it; ?proto=1&variant=bad plants a
      dead "Settings" menu item. Nothing real. -->
@@ -32,10 +33,11 @@
     // differently: an instrument that keeps one browser context for every screen checks Settings in that state
     if (proto && screen === 'orders') localStorage.setItem('seenOrders', '1');
     if (screen !== 'orders') {
-      app.innerHTML = '<h1>' + (proto && localStorage.getItem('seenOrders') ? 'Settings after orders' : 'Settings') + '</h1><section><h2>API credentials</h2><p>Secret: <code id="secret">••••••••34</code> <button id="show">Show</button></p><table><tbody><tr id="row"><td>Key 1</td><td><button id="trash"><svg data-icon="delete" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr><tr id="row2"><td>Key 2</td><td><button id="trash2"><svg class="lucide lucide-trash-2" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr></tbody></table></section>';
+      app.innerHTML = '<h1>' + (proto && localStorage.getItem('seenOrders') ? 'Settings after orders' : 'Settings') + '</h1><section><h2>API credentials</h2><p>Secret: <code id="secret">••••••••34</code> <button id="show">Show</button></p><table><tbody><tr id="row"><td>Key 1</td><td><button id="trash"><svg data-icon="delete" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr><tr id="row2"><td>Key 2</td><td><button id="trash2"><svg class="lucide lucide-trash-2" width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4 3V2h4v1M3 3l1 8h4l1-8"></path></svg></button></td></tr></tbody></table></section><p><img id="signout" src="img/signout.svg" width="12" height="12" style="cursor: pointer"></p>';
       document.getElementById('show').onclick = () => { document.getElementById('secret').textContent = SECRET; };
       document.getElementById('trash').onclick = () => document.getElementById('row').remove();
       document.getElementById('trash2').onclick = () => document.getElementById('row2').remove();
+      document.getElementById('signout').onclick = () => { sessionStorage.removeItem('signedIn'); location.reload(); };
     }
   }
   const go = (k) => { if (proto) { location.hash = `#/${k}`; } else { screen = k; localStorage.setItem('last', k); render(); } };
