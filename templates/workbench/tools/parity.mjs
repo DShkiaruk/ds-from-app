@@ -45,7 +45,7 @@ if (!BASE && opt('--serve')) {
   const { createServer } = await import('node:http');
   const { extname } = await import('node:path');
   const root = opt('--serve');
-  const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.png': 'image/png' };
+  const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.png': 'image/png' };
   server = createServer((req, res) => {
     const p = decodeURIComponent(req.url.split('?')[0]);
     let f = join(root, p);

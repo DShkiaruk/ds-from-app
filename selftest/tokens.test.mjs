@@ -53,6 +53,7 @@ test('the planted shapes of a product that declares its tokens', () => expectAll
   [T['lit-ff00aa']?.$extensions?.['co.eleken.ds']?.painted === true && T['lit-ff00aa'].$provenance.label === 'derived', 'a colour painted outside the declared tokens on 2 elements becomes lit-ff00aa (derived, painted)'],
   [!T['lit-radius-13'] && doc.$meta.platform.literals?.oneOffs?.radius?.includes(13), 'a radius off the declared scale painted once is a one-off, not a lit-* token'],
   [doc.$meta.platform.fonts?.stylesheets?.some((h) => /\/fonts\/fixture\.css$/.test(h)) && doc.$meta.platform.fonts.faces?.some((f) => /Fixture Sans/.test(f.family)), 'the web fonts the product loads: a font stylesheet and a declared face'],
+  [doc.$meta.platform.fonts?.faces?.some((f) => /Fixture Sans/.test(f.family) && f.file === 'assets/fonts/fixture.woff2'), 'a declared face keeps the path of its local copy'],
   [doc.$meta.platform.stack !== undefined, 'the stack the product is built with is recorded'],
   [doc.$meta.instruments.some((i) => i.name === 'ds-from-app scripts/tokens.mjs' && /^\d+\.\d+\.\d+$/.test(i.version)), 'the instrument and the plugin version are recorded'],
 ]));

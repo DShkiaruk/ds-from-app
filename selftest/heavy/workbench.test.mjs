@@ -97,6 +97,9 @@ test('the Workbench end to end: installs, green when clean, every gate red on it
     // 3. scaffold the Workbench
     r = await run('scaffold.mjs', 'workbench', repo);
     assert.equal(r.status, 0, r.stderr || r.stdout);
+    // the fixture's same-origin font loads from the copy the capture kept, not from the product's server
+    const fontsCss = readFileSync(join(repo, 'src', 'tokens', 'fonts.css'), 'utf8');
+    assert.match(fontsCss, /src: url\("\.\.\/\.\.\/extraction\/assets\/fonts\/fixture\.woff2"\)/, `fonts.css loads the kept font file:\n${fontsCss}`);
 
     // 4. install
     r = await sh('npm', ['install', '--no-audit', '--no-fund', '--prefer-offline'], repo);

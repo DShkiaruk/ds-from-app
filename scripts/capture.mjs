@@ -777,6 +777,23 @@ const externalIcons = await page.evaluate(async ({ refs, imgs }) => {
   }
   return out;
 }, { refs: walk.svgExternal, imgs: walk.svgImages }).catch(() => []);
+// The web fonts the page declares, fetched from the page's own origin, read-only, and kept next to the captures
+// (extraction/assets/fonts): the Workbench loads them from its own folder. A font left on the product's server is
+// refused cross-origin there — found on the first designer's product, where every text fell back to the default face
+// and measured 1–3 px off.
+const fontFiles = await page.evaluate(async (faces) => {
+  const out = [];
+  for (const f of faces || []) {
+    const m = /url\(\s*["']?([^"')]+)["']?\s*\)/.exec(f.src || ''); if (!m) continue;
+    let url; try { url = new URL(m[1], location.href); } catch { continue; }
+    if (url.origin !== location.origin || out.some((x) => x.url === url.href)) continue;
+    const r = await fetch(url.href, { credentials: 'same-origin' }).catch(() => null); if (!r?.ok) continue;
+    const bytes = new Uint8Array(await r.arrayBuffer()); if (!bytes.length || bytes.length > 3_000_000) continue;
+    let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    out.push({ url: url.href, name: decodeURIComponent(url.pathname.split('/').pop() || 'font'), base64: btoa(bin) });
+  }
+  return out;
+}, walk.fontFacesDeclared).catch(() => []);
 if (await looksLikeBotCheck(page)) {
   console.error(`refused: ${BOT_CHECK_ADVICE}`);
   await browser.close();
@@ -799,6 +816,14 @@ if (looksLikeSignIn) console.error('warning: this looks like a sign-in page (a p
 const screen = o.screen || new URL(page.url()).pathname.replace(/\W+/g, '-').replace(/^-|-$/g, '') || 'root';
 // the output folder exists only once a capture is going to be written (sign-in mode never needs it)
 mkdirSync(o.out, { recursive: true });
+// the font files beside the baseline folder (<extraction>/assets/fonts); each declared face says which file is its copy
+for (const f of fontFiles) {
+  const name = f.name.replace(/[^\w.-]+/g, '_');
+  const dir = join(dirname(o.out), 'assets', 'fonts');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, name), Buffer.from(f.base64, 'base64'));
+  for (const face of walk.fontFacesDeclared || []) if ((face.src || '').includes(f.url)) face.file = `assets/fonts/${name}`;
+}
 const shot = join(o.out, `${screen}--${o.viewport}--${o.scheme}.png`);
 
 // The baseline screenshot is taken HERE — immediately after the walk and BEFORE any

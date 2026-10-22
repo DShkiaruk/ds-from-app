@@ -235,10 +235,13 @@ export function generate({ root = process.cwd() } = {}) {
   const wf = doc.$meta?.platform?.fonts;
   const sheets = wf?.stylesheets ?? [], faces = wf?.faces ?? [];
   const hasFonts = sheets.length > 0 || faces.length > 0;
+  // a face the capture kept a copy of (extraction/assets/fonts) loads from it: the product's own server refuses its
+  // font files to another origin, so the Workbench would measure text in a fallback face
+  const localSrc = (f) => (f.file && existsSync(join(root, 'extraction', f.file)) ? String(f.src).replace(/url\(\s*["']?[^"')]+["']?\s*\)/, `url("../../extraction/${f.file}")`) : f.src);
   if (hasFonts) {
     files['src/tokens/fonts.css'] = [HEADER, '/* the web fonts the app loads (captured) */',
       ...sheets.map((h) => `@import url("${h}");`),
-      ...faces.map((f) => ['@font-face {', `  font-family: "${unq(f.family)}";`, f.weight ? `  font-weight: ${f.weight};` : null, f.style ? `  font-style: ${f.style};` : null, f.unicodeRange ? `  unicode-range: ${f.unicodeRange};` : null, `  src: ${f.src};`, '  font-display: swap;', '}'].filter(Boolean).join('\n'))].join('\n') + '\n';
+      ...faces.map((f) => ['@font-face {', `  font-family: "${unq(f.family)}";`, f.weight ? `  font-weight: ${f.weight};` : null, f.style ? `  font-style: ${f.style};` : null, f.unicodeRange ? `  unicode-range: ${f.unicodeRange};` : null, `  src: ${localSrc(f)};`, '  font-display: swap;', '}'].filter(Boolean).join('\n'))].join('\n') + '\n';
   }
   // a used family that no stylesheet names and no face declares: nothing recorded would load it. A stylesheet whose
   // url names no family (a kit id, a css file) is opaque and counts as covering every family.

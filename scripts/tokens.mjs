@@ -633,7 +633,10 @@ const FONT_SHEET = /\/fonts?[./]|family=|typekit|typography/i;
 const uniqBy = (list, key) => [...new Map(list.map((x) => [key(x), x])).values()];
 const xSheets = [...new Set(caps.flatMap(({ cap }) => cap.fonts?.crossOriginStylesheets ?? []))];
 const isFontSheet = (h) => { try { const u = new URL(h); return FONT_SHEET.test(u.host + u.pathname + u.search); } catch { return FONT_SHEET.test(h); } };
-const fontFaces = uniqBy(caps.flatMap(({ cap }) => cap.fonts?.declared ?? []), (f) => JSON.stringify([f.family, f.weight, f.style, f.unicodeRange, f.src]));
+const faceKey = (f) => JSON.stringify([f.family, f.weight, f.style, f.unicodeRange, f.src]);
+const allFaces = caps.flatMap(({ cap }) => cap.fonts?.declared ?? []);
+// a face's local copy (capture.mjs: assets/fonts/…), from whichever capture fetched it
+const fontFaces = uniqBy(allFaces, faceKey).map((f) => ({ ...f, file: allFaces.find((x) => faceKey(x) === faceKey(f) && x.file)?.file }));
 const fontsUsed = uniqBy(caps.flatMap(({ cap }) => (cap.fonts?.used ?? []).filter((f) => f.status === 'loaded')), (f) => JSON.stringify([f.family, f.weight, f.style])).map(({ family, weight, style }) => ({ family, weight, style }));
 const fonts = xSheets.length || fontFaces.length || fontsUsed.length ? {
   stylesheets: xSheets.filter(isFontSheet),

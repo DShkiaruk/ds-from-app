@@ -43,6 +43,8 @@ export async function startServer() {
     if (req.url.startsWith('/members')) { res.writeHead(302, { location: '/LoginV2.aspx?ReturnUrl=%2fmembers' }); res.end(); return; }
     if (req.url.startsWith('/LoginV2.aspx')) { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><html><head><meta charset="utf-8"><title>Logon</title></head><body><main><h1>Welcome</h1><form><input name="u"><input type="password" name="p"><button type="button">Continue</button></form></main></body></html>'); return; }
     if (req.url.startsWith('/fonts/')) { res.writeHead(200, { 'content-type': 'text/css' }); res.end(FONT_CSS); return; }
+    // the fixture's same-origin @font-face file: a few bytes are enough for capture.mjs to keep a copy
+    if (req.url.startsWith('/fixture.woff2')) { res.writeHead(200, { 'content-type': 'font/woff2' }); res.end(Buffer.from('wOF2fixture')); return; }
     if (req.url.startsWith('/sprite.svg') || req.url.startsWith('/bell.svg')) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(req.url.startsWith('/sprite') ? SPRITE : BELL); return; }
     res.writeHead(200, { 'content-type': 'text/html' });
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }

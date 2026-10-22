@@ -58,6 +58,8 @@ test('the fonts the page loads: a cross-origin stylesheet is recorded by href, a
   assert.ok(face, 'the same-origin @font-face is declared');
   assert.match(face.src, /url\("?https?:\/\/127\.0\.0\.1:\d+\/fixture\.woff2"?\)/, 'its src url is absolute');
   assert.ok('style' in face && 'unicodeRange' in face, 'a face carries style and unicode-range');
+  assert.equal(face.file, 'assets/fonts/fixture.woff2', 'the same-origin font file is kept beside the captures, and the face says where');
+  assert.equal(readFileSync(join(dir, 'assets', 'fonts', 'fixture.woff2'), 'utf8'), 'wOF2fixture', 'the kept file holds the bytes the server sent');
 });
 
 test('a screen that redirects is refused, not written under the wrong name', async () => {

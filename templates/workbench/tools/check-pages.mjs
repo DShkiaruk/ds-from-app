@@ -15,7 +15,7 @@ import { classifyLink, perfProblems, seoProblems, widthPlan } from './lib/pages-
 
 const root = resolve(process.argv[2] || 'dist');
 if (!existsSync(join(root, 'index.html'))) { console.error(`no build at ${root}: run npm run build first`); process.exit(1); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 const server = createServer((req, res) => {
   const p = decodeURIComponent(req.url.split('?')[0]);
   let f = join(root, p);

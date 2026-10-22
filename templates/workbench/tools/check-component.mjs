@@ -59,7 +59,7 @@ const capEls = caps.map((c) => {
 if (!caps.length) die('check:component: no baseline capture in extraction/baseline — nothing to compare with.');
 
 // storybook-static, served here on a free port (no dependency).
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.png': 'image/png', '.ico': 'image/x-icon' };
 const server = createServer((req, res) => {
   const f = join(SB, decodeURIComponent(req.url.split('?')[0]));
   if (!f.startsWith(SB) || !existsSync(f) || !statSync(f).isFile()) { res.writeHead(404); res.end(); return; }
