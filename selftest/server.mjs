@@ -51,6 +51,8 @@ export async function startServer() {
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }
     if (req.url.startsWith('/nothing-here')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body></body></html>'); return; }
     if (req.url.startsWith('/rows')) { res.end(ROWS); return; }
+    // two flat swatches, a dark blue and a saturated one: a screenshot's pixels must hold their computed colours
+    if (req.url.startsWith('/swatch')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Swatch</title></head><body style="margin:0"><h1 style="margin:0;height:40px">Swatch</h1><div id="a" style="width:200px;height:200px;background:rgb(25,57,92)"></div><div id="b" style="width:200px;height:200px;background:rgb(54,156,251)"></div></body></html>'); return; }
     // a single-URL product whose sign-in lives only in the page's memory: any page load of its tab signs out (a reload,
     // a link to another page). Its menu swaps the screen in place; "Print view" is a real page load; "Help" opens a tab;
     // an unnamed "+" opens another workspace for good: the menu hides, a copy with other ids (m-orders_1) shows.

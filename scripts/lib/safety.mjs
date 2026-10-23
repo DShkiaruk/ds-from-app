@@ -142,8 +142,14 @@ export async function dismiss(page, selectors, settle = 400) {
     let hit = null;
     for (const sel of selectors) { const l = page.locator(sel).filter({ visible: true }).first(); if (await l.count().catch(() => 0)) { hit = l; break; } }
     if (!hit) break;
-    const name = await hit.evaluate((el) => (el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().slice(0, 60)).catch(() => '');
-    if (UNSAFE.test(name) || REVEAL.test(name)) throw new Error(`--dismiss: refused — "${name}" could change data or unmask something; dismiss by the window's close control instead`);
+    const { name, inDialog } = await hit.evaluate((el) => ({
+      name: (el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().slice(0, 60),
+      inDialog: Boolean(el.closest('[role="dialog"], dialog, [aria-modal="true"], [class*="modal" i], [class*="dialog" i], [class*="window" i], [class*="popup" i]')),
+    })).catch(() => ({ name: '', inDialog: false }));
+    // a plain "Cancel" / "Close" inside a dialog is the safe way out of it, though UNSAFE knows "cancel" ("Cancel order",
+    // "Cancel subscription" stay refused): found on the first designer's product, whose create dialog has a Cancel
+    const wayOut = inDialog && /^(cancel|close)$/i.test(name);
+    if (!wayOut && (UNSAFE.test(name) || REVEAL.test(name))) throw new Error(`--dismiss: refused — "${name}" could change data or unmask something; dismiss by the window's close control instead`);
     try { await hit.click({ timeout: 5000 }); } catch { break; }
     n++;
     await page.waitForTimeout(settle);

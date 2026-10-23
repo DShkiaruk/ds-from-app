@@ -92,6 +92,40 @@ test('--attach: a capture works in the signed-in tab, at 2x, read-only, and leav
   await b.close();
 });
 
+test('--attach: the screenshot holds the computed colours (sRGB, not the display profile)', async () => {
+  // the attached window is visible, so it draws in the display's colour profile unless told otherwise
+  const b0 = await connect();
+  const t0 = b0.contexts()[0].pages()[0];
+  await t0.evaluate((u) => { location.href = u; }, `${S.url}swatch`).catch(() => {});
+  await t0.waitForURL(/swatch/).catch(() => {});
+  await b0.close();
+  const out = join(dir, 'swatch');
+  const r = await run('capture.mjs', '--attach', W, '--here', '--screen', 'swatch', '--out', out, '--settle', '200');
+  assert.equal(r.status, 0, r.stderr);
+  const buf = readFileSync(join(out, 'swatch--1440x900--light.png'));
+  // the bytes as a tool reads them, without colour management: a PNG tagged with the display's profile (an iCCP chunk)
+  // holds that profile's numbers, which a browser converts back on screen and every other reader takes as they are
+  const iccp = buf.indexOf('iCCP');
+  assert.ok(iccp < 0 || /srgb/i.test(buf.subarray(iccp + 4, iccp + 84).toString('latin1')), `the PNG carries a colour profile that is not sRGB: ${buf.subarray(iccp + 4, iccp + 40).toString('latin1')}`);
+  const png = buf.toString('base64');
+  const b = await connect();
+  const p = await b.contexts()[0].newPage();
+  const px = await p.evaluate(async (data) => {
+    const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();
+    const img = await createImageBitmap(blob, { colorSpaceConversion: 'none' });
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d', { colorSpace: 'srgb' }); g.drawImage(img, 0, 0);
+    const at = (x, y) => [...g.getImageData(x, y, 1, 1).data].slice(0, 3);
+    return { a: at(200, 80 + 200), b: at(200, 80 + 600) }; // 2x: swatch a spans y 80–480, b 480–880
+  }, png);
+  await p.close(); await b.close();
+  const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= 2);
+  assert.ok(near(px.a, [25, 57, 92]), `swatch a painted ${px.a}, computed 25,57,92`);
+  assert.ok(near(px.b, [54, 156, 251]), `swatch b painted ${px.b}, computed 54,156,251`);
+  // the window goes back to the fixture's sign-in page for the tests after this one
+  const b2 = await connect(); await b2.contexts()[0].pages()[0].evaluate((u) => { location.href = u; }, `${S.url}spa/`).catch(() => {}); await b2.close();
+});
+
 test('--attach: a second run while one is working is refused, not interleaved; a lock left by a finished run is taken over', async () => {
   const lock = join(windows, W, 'run.lock');
   writeFileSync(lock, String(process.pid)); // a run that is alive: this test process
@@ -215,7 +249,9 @@ test('flows.mjs --no-reload stops when a press changes the page for good, names 
   const m = f.stderr.match(/stopped: after pressing .*\(div#plus\).*--deny-selector '([^']+)'/);
   assert.ok(m, `the press that broke the way back is named, with the flag that skips it:\n${f.stderr}`);
   await fresh();
-  const g = await run('flows.mjs', repo, '--attach', M, '--no-reload', '--home', '#m-orders', '--dismiss', 'img.wclose', '--deny-selector', m[1], '--settle', '150');
+  assert.equal(m[1], 'div#plus');
+  // a selector that matches the element, not only the string flows.json printed
+  const g = await run('flows.mjs', repo, '--attach', M, '--no-reload', '--home', '#m-orders', '--dismiss', 'img.wclose', '--deny-selector', '#plus', '--settle', '150');
   assert.equal(g.status, 0, g.stdout + g.stderr);
   const flows = JSON.parse(readFileSync(join(repo, 'flows', 'flows.json'), 'utf8'));
   assert.ok(flows.screens.flatMap((x) => x.refused || []).some((r) => r.selector === 'div#plus' && /--deny-selector/.test(r.why)), 'the "+" is refused by its selector');
@@ -233,7 +269,7 @@ test('an in-app window Escape does not close: without --dismiss the map stops an
   assert.equal(c.status, 0, c.stderr);
   const cap = JSON.parse(readFileSync(join(dir, 'memory', 'again', 'settings-again--1440x900--light.json'), 'utf8'));
   assert.equal(cap.meta.dismissed?.before, 1, 'the window was closed by its own close control before the clicks');
-  assert.ok(!cap.meta.dismissed?.beforeShot, 'nothing is closed before the screenshot without --dismiss-late');
+  assert.ok(!cap.meta.dismissed?.late, 'nothing is closed after the clicks without --dismiss-late');
   assert.ok(await signedInM());
 });
 

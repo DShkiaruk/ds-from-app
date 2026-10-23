@@ -21,6 +21,11 @@ function fakeRepo({ screens } = {}) {
 }
 const run = (repo, args, env = {}) => spawnSync(process.execPath, args, { cwd: repo, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: repo, ...env } });
 
+test('the lint gate lets a scrolling region be focusable, as the stories gate (axe) requires', () => {
+  const cfg = readFileSync(join(ROOT, 'templates', 'workbench', 'eslint.config.js'), 'utf8');
+  assert.match(cfg, /'jsx-a11y\/no-noninteractive-tabindex': \['error', \{[^}]*roles: \[[^\]]*'region'/);
+});
+
 test('gates fast runs every gate, even after a failure, in plain words', () => {
   const repo = fakeRepo();
   try {

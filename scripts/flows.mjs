@@ -60,6 +60,18 @@ const DENY = opt('--deny') ? new RegExp(`^(?:${opt('--deny')})$`, 'i') : null;
 // --deny-selector '<selector>': a control refused by its selector exactly as flows.json prints it — for one that has no
 // name to deny (an unnamed "+" that opens another workspace tab for good, in a run with no page load). Repeatable.
 const DENY_SELECTORS = new Set(many('--deny-selector'));
+// The controls on the page now that a --deny-selector matches — the element itself or a wrapper of it (Element.matches /
+// closest), not only the selector string flows.json printed: 'img.SidebarCollapseButton' matched nothing as a string
+// and the press collapsed the menu (found on the first designer's product).
+let deniedNow = new Set();
+const markDenied = async (list) => {
+  if (!DENY_SELECTORS.size || !list.length) return;
+  const hit = await page.evaluate(({ sels, list }) => list.filter((q) => {
+    let el; try { el = document.querySelector(q); } catch { return false; }
+    return el && sels.some((x) => { try { return el.matches(x) || Boolean(el.closest(x)); } catch { return false; } });
+  }), { sels: [...DENY_SELECTORS], list }).catch(() => []);
+  for (const q of hit) deniedNow.add(q);
+};
 const ONLY = many('--only');
 // --no-reload (with --attach): no page load at all, for a product that signs out on every one. A screen is reached by
 // --home (a click chain to a known place: a menu item, repeatable) and then its capture's own clicks; between presses
@@ -239,7 +251,9 @@ const SIGNIN = /\/(log-?in|sign-?in|auth)\b/i;
 // that is not shown — under the same id), and a click that fails says so instead of leaving the page where it was.
 const chainClick = async (sel) => {
   const l = page.locator(sel).filter({ visible: true }).first();
-  if (!(await l.count().catch(() => 0))) { openFail = { selector: sel, why: 'nothing visible matches it' }; return false; }
+  // a click of the chain that is also a --dismiss selector (a message's OK the capture pressed) is there only when the
+  // thing it closes is: skipped when nothing matches it
+  if (!(await l.count().catch(() => 0))) { if (DISMISS.includes(sel)) return true; openFail = { selector: sel, why: 'nothing visible matches it' }; return false; }
   try { await l.click({ timeout: 10000 }); } catch (e) { openFail = { selector: sel, why: clickFailure(e) }; return false; }
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(SETTLE);
@@ -253,7 +267,7 @@ const openScreen = async (s) => {
     for (let i = 0; i < 2; i++) await page.keyboard.press('Escape').catch(() => {});
     try { await dismiss(page, DISMISS); } catch (e) { console.error(e.message); process.exit(2); }
     const chain = [...HOME, ...s.clicks];
-    if (!chain.length) return false; // nothing reaches it without a page load: capture it with --here and a --click chain, or pass --home
+    if (!chain.length) { openFail = { selector: '(none)', why: 'no click chain reaches it: only a page load shows it — capture it with --here and a --click chain, or pass --home' }; return false; }
     // signed out in place: the tab asks for a password, and the screen's own capture did not — checked before the way
     // back (a signed-out page has no menu to click) and after it
     const own = caps.find((k) => k.meta.screen === s.name);
@@ -286,7 +300,10 @@ const landmarkOf = new Map();
 const sharedNames = new Set(allScreens.filter((x) => x.shared).map((x) => x.name ?? x.url));
 for (const s of allScreens) {
   if (await openScreen(s)) landmarkOf.set(s.name ?? s.url, (await page.evaluate(SNAP, LANDMARK)).landmark);
-  else if (NO_RELOAD) { console.error(`${s.name ?? s.url}: its clicks do not reach it (${openFail?.selector}: ${openFail?.why}) — recapture it, or fix --home; flows.json was not written`); process.exit(4); }
+  // Not reached by clicks (a landing view only a page load shows): its landmark stays unknown, and a press that lands
+  // on it is reported among the pages no capture holds. A screen being mapped that cannot be reached is recorded
+  // unreachable below, with the reason.
+  else if (NO_RELOAD) console.log(`  warning: ${s.name ?? s.url} is not reached by its clicks (${openFail?.selector}: ${openFail?.why}) — its landmark is unknown`);
 }
 {
   const dup = [...landmarkOf.entries()].filter(([k, m], i, a) => sharedNames.has(k) && a.findIndex(([, x]) => x === m) !== i);
@@ -303,7 +320,7 @@ const judge = (c, url, origin) => {
   if (c.href && !c.href.startsWith('#')) { try { if (new URL(c.href, url).origin !== origin) return { skip: 'another origin' }; } catch { /* relative */ } }
   // In a data row the name carries the row's data ("Edit Create your first guide"): the verb is its first word.
   const verb = c.inData ? c.name.split(' ')[0] : c.name;
-  if (DENY_SELECTORS.has(c.selector)) return { refuse: { role: c.role, name: c.name, selector: c.selector, why: 'denied for this product (--deny-selector)' } };
+  if (DENY_SELECTORS.has(c.selector) || deniedNow.has(c.selector)) return { refuse: { role: c.role, name: c.name, selector: c.selector, why: 'denied for this product (--deny-selector)' } };
   if (DENY && c.name && DENY.test(c.name)) return { refuse: { role: c.role, name: c.name, why: 'denied for this product (--deny)' } };
   if (REVEAL.test(verb) || REVEAL_ICON.test(c.icon)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'unmasks something the page hides' } };
   const risky = c.type === 'submit' || (c.inForm && c.role === 'button' && c.type !== 'button') || UNSAFE.test(verb) || (!c.name && UNSAFE.test(c.icon));
@@ -351,6 +368,7 @@ for (const s of screensIn) {
   const title = await page.evaluate(() => document.querySelector('h1')?.innerText?.trim() ?? document.title);
   const own = (await page.evaluate(SNAP, LANDMARK)).landmark;
   const rows = await page.evaluate(UNPRESSED);
+  await markDenied([...all.map((c) => c.selector), ...rows.map((r) => r.selector)]);
   // One pattern for repeated data: the first two controls that share role and target pattern.
   const perPattern = new Map();
   const todo = [];
@@ -413,7 +431,9 @@ for (const s of screensIn) {
     if (c.group > 1) { t.group = c.group; t.note = `${c.group} similar, pressed the first`; }
     // One level down: a press that opened a layer — its own controls, each judged like the page's, each pressed once.
     if (effect.kind === 'open') {
-      const inner = (await page.evaluate(CONTROLS, true)).filter((x, i, a) => !known.has(x.selector) && a.findIndex((y) => y.role === x.role && y.name === x.name) === i);
+      const innerAll = await page.evaluate(CONTROLS, true);
+      await markDenied(innerAll.map((x) => x.selector));
+      const inner = innerAll.filter((x, i, a) => !known.has(x.selector) && a.findIndex((y) => y.role === x.role && y.name === x.name) === i);
       t.inside = { refused: [], pressed: [] };
       const safe = [];
       for (const x of inner) {
@@ -475,6 +495,7 @@ if (tabsOpen.length) {
   doc.uncapturedTabs = tabsOpen;
   console.log(`  tab panels no capture holds (${tabsOpen.length}): ${tabsOpen.slice(0, 12).map((t) => `${t.screen} \u203a ${t.tab}`).join(', ')} — capture each the flow needs, e.g. node scripts/${tabsOpen[0].command}`);
 }
+if (NO_RELOAD) console.log(`  note: the map pressed controls in the designer's window and nothing reset it: the product may keep the last choice (a date range, a tab, a collapsed menu) — look at the window before the next capture, or sign in again (--close, then --keep-open) for a clean one`);
 if (ATTACH) doc.window = { attached: ATTACH, noReload: NO_RELOAD || undefined, home: HOME.length ? HOME : undefined, note: NO_RELOAD ? 'mapped in the window the designer signed in in, with no page load: each screen reached by --home and its own clicks, so state the page holds carries from one press to the next' : 'mapped in the window the designer signed in in: one tab for every load, so state the product keeps in storage (the last tab, the last program) carries from one press to the next load' };
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);

@@ -146,6 +146,19 @@ test('parity (R23): a missing icon-only control is reported with how to make it 
   } finally { rmSync(fl, { recursive: true, force: true }); }
 });
 
+test('parity: a clickable row the product drew without a role is found as the link or button the rebuild made of it', async () => {
+  const fl = fixtureRepo('dsfa-parity-rows-');
+  try {
+    handFlows(fl, [{ ...accounts, transitions: [
+      { control: { role: 'row', name: 'Acme' }, effect: { kind: 'navigate', to: '/detail/1', pattern: '/detail/:id' } },
+      { control: { role: 'row', name: 'Compact view' }, effect: { kind: 'change' } },
+    ] }]);
+    writeFileSync(join(fl, 'flows', 'routes.json'), JSON.stringify({ accounts: '/flows/' }));
+    const r = await parity(fl, '--prototype', S.url);
+    assert.doesNotMatch(r.stdout, /missing control: row/, r.stdout);
+  } finally { rmSync(fl, { recursive: true, force: true }); }
+});
+
 test('parity (R24): prototype screenshots are named by screen name, so two screens on one pattern never share a file', async () => {
   const fl = fixtureRepo('dsfa-parity-shots-');
   try {

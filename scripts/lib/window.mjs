@@ -52,6 +52,10 @@ export async function openWindow(name, url) {
     `--user-data-dir=${dir}`, '--remote-debugging-port=0', '--enable-automation', '--no-first-run', '--no-default-browser-check',
     // a window behind others still renders, so a capture taken while the designer looks elsewhere is not blank
     '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
+    // the screenshot in sRGB, as Playwright's own browser renders it: a visible window draws in the display's profile
+    // (P3 on a MacBook), and the PNG's colours moved off the computed ones (#19395c painted as rgb(33,56,89): found on
+    // the first designer's run, where colours read from screenshots reach the tokens)
+    '--force-color-profile=srgb',
     url,
   ], { detached: true, stdio: 'ignore' });
   child.unref();

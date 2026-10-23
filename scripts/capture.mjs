@@ -33,7 +33,7 @@
 
 import { launch, headlessFor } from './lib/browser.mjs';
 import { openWindow, connectWindow, closeWindow, signedInTab, rememberTab, lockWindow, emulate, fullShot } from './lib/window.mjs';
-import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
@@ -108,10 +108,12 @@ function args(argv) {
     else if (a === '--here') o.here = true;
     // what the product leaves over the page, closed by its own close control whenever one is visible (lib/safety.mjs
     // dismiss), repeatable: --dismiss before the clicks (a window an earlier run left open, a back button to the
-    // screen's start); --dismiss-late before the screenshot (a message that comes late, over the surface) — never the
-    // surface the clicks opened, so it is a flag of its own.
+    // screen's start); --dismiss-late after the clicks, before the walk and the screenshot (a message that comes late,
+    // over the surface) — never the surface the clicks opened, so it is a flag of its own.
     else if (a === '--dismiss') (o.dismiss ||= []).push(next());
     else if (a === '--dismiss-late') (o.dismissLate ||= []).push(next());
+    // elements whose hover / focus / pressed states the rebuild needs, sampled before any other (repeatable)
+    else if (a === '--state') (o.state ||= []).push(next());
     else if (a === '--max-state-samples') o.maxStateSamples = Number(next());
     else if (a === '--settle') o.settle = Number(next());
     else if (a === '--motion') o.reducedMotion = false;   // opt OUT of reduced motion
@@ -598,16 +600,22 @@ async function captureStates(page, cdp, samples, interact, startUrl) {
 }
 
 // pick the state sample so it covers component KINDS, not just the first N nodes:
-// one representative per (tag+role+first class) signature, largest first.
-function pickStateSamples(elements, max) {
+// one representative per (tag+role+first class) signature, largest first. Named ones (--state) come first, every one.
+// A control drawn from a plain div or li (a menu item, a select, a list row) counts by its own pointer cursor: found
+// on the first designer's product, where every menu item, select and row was such a div and a whole capture got 1–7
+// samples, none of them those.
+function pickStateSamples(elements, max, named = new Set()) {
+  const first = elements.filter((e) => named.has(e.path));
   const bySig = new Map();
   for (const el of elements) {
-    if (!el.interactive) continue;
+    if (named.has(el.path)) continue;
+    const pointer = el.values?.cursor === 'pointer' && !el.notOwnChoice?.includes('cursor');
+    if (!el.interactive && !pointer) continue;
     const sig = `${el.tag}|${el.role || ''}|${el.classes[0] || ''}`;
     const cur = bySig.get(sig);
     if (!cur || el.area > cur.area) bySig.set(sig, el);
   }
-  return [...bySig.values()].sort((a, b) => b.area - a.area).slice(0, max);
+  return [...first, ...[...bySig.values()].sort((a, b) => b.area - a.area)].slice(0, Math.max(max, first.length));
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -770,12 +778,13 @@ if (!o.here) {
     }
   }
 }
-const dismissed = { before: 0, beforeShot: 0 };
+const dismissed = { before: 0, late: 0 };
 try { dismissed.before = await dismiss(page, o.dismiss || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
 const clicked = [];
 for (const sel of o.clicks || []) {
   // the first VISIBLE match: a page can hold a hidden copy of its menu (a workspace tab not shown) under the same id
   const el = page.locator(sel).filter({ visible: true }).first();
+  if (!(await el.count()) && (o.dismiss || []).includes(sel)) continue; // a --click that is also a --dismiss: only there when what it closes is
   if (!(await el.count())) { console.error(`--click ${sel}: nothing visible matches — the surface behind it was not reached`); await browser.close(); process.exit(2); }
   const info = await el.evaluate((n) => ({ type: n.getAttribute('type'), inForm: Boolean(n.closest('form')), text: (n.innerText || n.getAttribute('aria-label') || '').trim().slice(0, 80), tag: n.tagName.toLowerCase(), icon: n.querySelector('[data-icon]')?.getAttribute('data-icon') || '' }));
   if ((REVEAL.test(info.text) || REVEAL_ICON.test(info.icon)) && !o.allowReveal) { console.error(`--click ${sel}: refused — "${info.text || info.icon}" unmasks something the page hides; the capture and its screenshot would hold it. --allow-reveal only on a product with nothing secret behind it.`); await browser.close(); process.exit(2); }
@@ -797,6 +806,10 @@ if (o.rootClass || o.rootAttr) {
   await page.waitForTimeout(Math.min(o.settle, 600));
 }
 
+// --dismiss-late: a message that came after the clicks, closed before the walk — so neither the element list nor the
+// screenshot holds it (it ran before the screenshot only, and the walk kept the message: found on the first designer's
+// product, whose parity then asked the rebuild for the message's OK).
+try { dismissed.late = await dismiss(page, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
 const walk = await page.evaluate(PAGE_WALK, { props: PROPS, inherited: [...INHERITED] });
 // Icons that live in another file — a sprite symbol, an <img> svg — fetched from the page's own origin, read-only.
 const externalIcons = await page.evaluate(async ({ refs, imgs }) => {
@@ -864,7 +877,6 @@ for (const f of fontFiles) {
   writeFileSync(join(dir, name), Buffer.from(f.base64, 'base64'));
   for (const face of walk.fontFacesDeclared || []) if ((face.src || '').includes(f.url)) face.file = `assets/fonts/${name}`;
 }
-try { dismissed.beforeShot = await dismiss(page, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
 const shot = join(o.out, `${screen}--${o.viewport}--${o.scheme}.png`);
 
 // The baseline screenshot is taken HERE — immediately after the walk and BEFORE any
@@ -880,7 +892,12 @@ await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
 
 const cdp = await context.newCDPSession(page).catch(() => null);
 if (cdp) { await cdp.send('DOM.enable').catch(() => {}); await cdp.send('CSS.enable').catch(() => {}); }
-const samples = pickStateSamples(walk.elements, o.maxStateSamples);
+const named = o.state?.length ? new Set(await page.evaluate(({ sels, paths }) => paths.filter((p) => {
+  let el; try { el = document.querySelector(p.split('::shadow>')[0]); } catch { return false; }
+  return el && sels.some((x) => { try { return el.matches(x); } catch { return false; } });
+}), { sels: o.state, paths: walk.elements.map((e) => e.path) }).catch(() => [])) : new Set();
+if (o.state?.length && !named.size) console.error(`warning: --state ${o.state.join(', ')}: no captured element matches — no state sampled for it`);
+const samples = pickStateSamples(walk.elements, o.maxStateSamples, named);
 const states = await captureStates(page, cdp, samples, o.interact, page.url());
 
 // A second screenshot AFTER probing, only when real input ran. The pair is the
@@ -908,7 +925,7 @@ const capture = {
     window: o.attach || undefined,
     // no page load (--here): the tab as it was, then the clicks
     noReload: o.here || undefined,
-    dismissed: dismissed.before || dismissed.beforeShot ? dismissed : undefined,
+    dismissed: dismissed.before || dismissed.late ? dismissed : undefined,
     blockedWrites: blockedWrites ? blockedWrites.map((b) => `${b.method} ${new URL(b.url).pathname}`) : undefined,
     readsAllowed: o.blockWrites ? o.reads ?? null : undefined,
     socketReadsAllowed: o.blockWrites ? o.socketReads ?? null : undefined,
@@ -954,6 +971,22 @@ const capture = {
 };
 
 const file = join(o.out, `${screen}--${o.viewport}--${o.scheme}.json`);
+// A recapture of a screen whose layout moved: a setting the product remembers per account (a collapsed menu) changes
+// every later capture without a word (found on the first designer's product: its menu 55 px wide after a fresh
+// sign-in instead of 172). Elements found by the same path in both captures; most of them moved, or most paths are
+// gone: said on the console and in the file.
+if (existsSync(file)) {
+  try {
+    const old = new Map(JSON.parse(readFileSync(file, 'utf8')).elements.map((e) => [e.path, e.rect]));
+    const both = walk.elements.filter((e) => old.has(e.path));
+    const moved = both.filter((e) => Math.abs(e.rect.x - old.get(e.path).x) > 24 || Math.abs(e.rect.w - old.get(e.path).w) > 24).length;
+    const kept = both.length / Math.max(1, Math.min(old.size, walk.elements.length));
+    if (kept < 0.5 || (both.length >= 10 && moved / both.length > 0.3)) {
+      capture.meta.layoutChanged = { matchedShare: +kept.toFixed(2), movedShare: both.length ? +(moved / both.length).toFixed(2) : null };
+      console.error(`warning: the layout of ${screen} changed since its last capture (${both.length ? Math.round((moved / both.length) * 100) : 0}% of the elements found in both moved, ${Math.round(kept * 100)}% found at all) — a setting the product remembers (a collapsed menu, another tab)? Compare the screenshots before keeping it.`);
+    }
+  } catch { /* an old file that does not parse: nothing to compare */ }
+}
 mkdirSync(dirname(file), { recursive: true });
 writeFileSync(file, JSON.stringify(capture, null, 1));
 

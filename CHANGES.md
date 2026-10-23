@@ -1,5 +1,31 @@
 # Changes
 
+## 0.2.6 — 2026-10-23
+
+The first designer's field report after rebuilding a seven-screen flow with 0.2.5: ten findings, all addressed.
+- **Parity found no "row".** flows.mjs records a clickable element without a control role (a list row, a view link,
+  an icon picture) as role `row`, and the Workbench's `tools/parity.mjs` looked for `[role="row"]`, which a correct
+  rebuild of links and buttons never has: 29 of 29 transitions were missing. A row is now looked up as a link or a
+  button, the one its effect implies first, then as a row. Existing Workbenches get it with `scaffold.mjs update`.
+- **`--no-reload` no longer refuses the whole map** when one captured screen is reached only by a page load (the view
+  right after sign-in): it warns, and that screen's landmark stays unknown. A chain click that is also a `--dismiss`
+  selector is skipped when nothing matches it (in `capture.mjs` too).
+- **`--dismiss-late` runs before the element walk**, so the closed message is in neither the screenshot nor the
+  element list (parity asked the rebuild for the message's OK).
+- **The attached window renders in sRGB** (`--force-color-profile=srgb`, as Playwright's own browser). Without it the
+  PNG carried the display's colour profile and its pixels held that profile's numbers (#19395c read as rgb(33,56,89));
+  a selftest reads the pixels without colour management and fails without the flag.
+- **`--deny-selector` matches the element or a wrapper of it**, not only the selector string flows.json printed.
+- **A recapture whose layout moved is said** (`warning: the layout of … changed`, `meta.layoutChanged`): a setting the
+  product remembers (a collapsed menu) changed every capture silently.
+- **The Workbench's lint lets a scrolling region be focusable** (`role="region"` with `tabIndex={0}`), as the stories
+  gate's axe check requires: the two gates could not both pass.
+- **`--dismiss` may press a plain "Cancel" or "Close" inside a dialog**; "Cancel order" and the like stay refused.
+- **States are sampled on controls drawn from plain divs** (their own pointer cursor counts), and `--state
+  '<selector>'` samples named elements first: a whole capture of that product got 1–7 samples, none of them a menu
+  item, a select or a row.
+- After a map with no page load, `flows.mjs` notes that the product may keep the last choice in the window.
+
 ## 0.2.5 — 2026-10-22
 
 From the first designer's run, on a single-URL product that signs out on every page load of its tab, a reload

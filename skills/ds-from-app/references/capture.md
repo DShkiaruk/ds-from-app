@@ -4,6 +4,10 @@
 Always into the product repository: `<repo>/extraction/baseline/` — create it first (`scaffold.mjs init`). One capture
 is `<screen>--<WxH>--<scheme>.json` plus `.png`. Screen names: name every screen by its heading or menu label in
 kebab-case (`policies-management`), never by the file or the URL (`option-1`); the designer's language is fine. Default viewport `1440x900`.
+States (hover, focus, pressed) are sampled on controls and on elements with their own pointer cursor, up to 40 kinds;
+`--state '<selector>'` (repeatable) samples the elements the flow's states need first — a menu item, a select, a row.
+A recapture whose layout moved since the last capture of that screen says so (`warning: the layout of … changed`):
+compare the screenshots — a setting the product remembers (a collapsed menu) is the usual cause.
 
 ## Read-only, always
 - Both `capture.mjs` and `flows.mjs` block writes by default: every request that is not GET/HEAD/OPTIONS is blocked.
@@ -70,8 +74,13 @@ kebab-case (`policies-management`), never by the file or the URL (`option-1`); t
    names the layer that took it (`<div id=…> intercepts pointer events`): look at it and dismiss it. A product that
    reports "a connection problem" when a blocked write fails shows its message after many presses: dismiss its OK, and
    say in your report that the message comes from the write block, not from the product. `--dismiss-late` closes a
-   message that comes after the clicks, before the screenshot (never the surface the clicks opened). Wait long enough
-   for a form that loads (`--settle 3000`): a capture of "Loading…" is not the state.
+   message that comes after the clicks, before the element walk and the screenshot (never the surface the clicks
+   opened). A plain "Cancel" or "Close" inside a dialog may be a `--dismiss`; "Cancel order" and the like stay refused.
+   A `--click` that is also a `--dismiss` selector is skipped when nothing matches it. Wait long enough for a form that
+   loads (`--settle 3000`): a capture of "Loading…" is not the state. `--deny-selector` refuses a control that a CSS
+   selector matches, itself or a wrapper of it. A screen only a page load shows (the view right after sign-in) is
+   warned about, not mapped. After a map with no page load, the product may keep the last choice it saw (a date range,
+   a tab): look at the window before the next capture, or sign in again.
 
 ## Which screens
 1. Capture the entry screen.

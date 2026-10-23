@@ -102,6 +102,28 @@ test('a single-URL product: the session restore, a screen behind a click, and th
   assert.equal(S.posts(), 1, '--reads lets a named read through a write block');
 });
 
+test('state samples: a row drawn from a div with a pointer cursor is sampled; --state samples a named element first', async () => {
+  const out = join(dir, 'rows-states');
+  const r = await run('capture.mjs', '--url', `${S.url}rows`, '--screen', 'rows', '--out', out, '--no-interact', '--settle', '200', '--state', 'h1');
+  assert.equal(r.status, 0, r.stderr);
+  const cap = JSON.parse(readFileSync(join(out, 'rows--1440x900--light.json'), 'utf8'));
+  assert.ok(cap.states.some((x) => /div#list>div/.test(x.path)), `a clickable div row is among the samples: ${cap.states.map((x) => x.path).join(' | ')}`);
+  assert.match(cap.states[0]?.path ?? '', /h1/, 'the --state element is sampled first');
+});
+
+test('a recapture whose layout moved is said, not kept silently', async () => {
+  const out = join(dir, 'relayout');
+  const a = await run('capture.mjs', '--url', `${S.url}rows`, '--screen', 'same', '--out', out, '--no-interact', '--settle', '150');
+  assert.equal(a.status, 0, a.stderr);
+  assert.doesNotMatch(a.stderr, /layout of same changed/, 'a first capture has nothing to compare with');
+  const again = await run('capture.mjs', '--url', `${S.url}rows`, '--screen', 'same', '--out', out, '--no-interact', '--settle', '150');
+  assert.doesNotMatch(again.stderr, /layout of same changed/, 'the same layout again: no warning');
+  const b = await run('capture.mjs', '--url', S.url, '--screen', 'same', '--out', out, '--no-interact', '--settle', '150');
+  assert.equal(b.status, 0, b.stderr);
+  assert.match(b.stderr, /warning: the layout of same changed since its last capture/);
+  assert.ok(JSON.parse(readFileSync(join(out, 'same--1440x900--light.json'), 'utf8')).meta.layoutChanged);
+});
+
 test('sign-in mode saves the session into a folder that does not exist yet', async () => {
   const target = join(dir, 'new', 'sessions', 'x.auth.json');
   assert.ok(!existsSync(join(dir, 'new')), 'precondition: the folder is absent');

@@ -175,6 +175,22 @@ async function locate(role, c, seen = new Map()) {
   return null;
 }
 
+// A clickable row the product drew with no control role (a list row, a view link, an icon picture): flows.mjs records
+// it as role "row", and a correct rebuild makes it a link or a button (rule 7, jsx-a11y) — so it is looked up under
+// those roles, the one its effect implies first (navigate → link, open/change → button), then as a row. Found on the
+// first designer's product: 29 of 29 transitions were "missing control: row" against a rebuild of links and buttons.
+async function locateRow(role, c, effect, seen) {
+  if (role !== 'row') return locate(role, c, seen);
+  const order = (effect?.kind === 'navigate' && !effect.toScreen ? ['link', 'button'] : ['button', 'link']).concat(['row', 'menuitem', 'tab']);
+  const before = new Map(seen); // a failed role must not use up the k-th match of a name that holds a record
+  for (const r of order) {
+    const l = await locate(r, c, seen);
+    if (l) return l;
+    seen.clear(); for (const [k, v] of before) seen.set(k, v);
+  }
+  return locate('row', c, seen);
+}
+
 const ONLY = args.flatMap((a, i) => (a === '--only' ? [args[i + 1]] : []));
 const REQUIRE = args.flatMap((a, i) => (a === '--require' ? [args[i + 1]] : []));
 const report = [];
@@ -266,7 +282,7 @@ for (const s of flows.screens.filter((x) => !ONLY.length || ONLY.includes(x.name
       const n = kitSeen.get(t.control.name) ?? 0; kitSeen.set(t.control.name, n + 1);
       const all = page.getByRole(role, { name: t.control.name, exact: true });
       loc = (await all.count().catch(() => 0)) > n ? all.nth(n) : null;
-    } else loc = await locate(role, t.control, seenData);
+    } else loc = await locateRow(role, t.control, t.effect, seenData);
     if (!loc) { r.transitions.missing.push(`${t.control.kitName ? `${t.control.role} ""` : missingControlText(t.control)}${t.control.kitName ? ` (the kit's "${t.control.name}" not found)` : ''}`); continue; }
     const before = await page.evaluate(SNAP);
     try { await loc.click({ timeout: 3000 }); } catch { r.transitions.dead.push(`${t.control.role} "${t.control.name}" (not clickable)`); continue; }

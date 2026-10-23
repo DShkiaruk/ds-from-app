@@ -12,4 +12,8 @@ export default tseslint.config(
   jsxA11y.flatConfigs.recommended,
   { plugins: { 'react-hooks': reactHooks }, rules: reactHooks.configs.recommended.rules },
   { languageOptions: { globals: { ...globals.browser } } },
+  // A scrolling region must be focusable for axe (scrollable-region-focusable, the stories gate) and jsx-a11y refused
+  // tabIndex={0} on it (the lint gate): both could not pass, so a rebuild left its document viewer unscrollable (found
+  // on the first designer's run). <div role="region" aria-label="…" tabIndex={0}> — the pattern axe recommends — passes.
+  { rules: { 'jsx-a11y/no-noninteractive-tabindex': ['error', { tags: [], roles: ['tabpanel', 'region'], allowExpressionValues: true }] } },
 );
