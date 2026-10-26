@@ -16,6 +16,7 @@ const flowsHtml = readFileSync(join(F, 'flows.html'), 'utf8');
 const literalHtml = readFileSync(join(F, 'literal.html'), 'utf8');
 const spaHtml = readFileSync(join(F, 'spa.html'), 'utf8');
 const actionsHtml = readFileSync(join(F, 'actions.html'), 'utf8');
+const formAppHtml = readFileSync(join(F, 'form-app.html'), 'utf8');
 // A font service's stylesheet: linked through the other host name (localhost vs 127.0.0.1), so it is cross-origin.
 const FONT_CSS = '@font-face { font-family: "Fixture Web"; font-style: normal; font-weight: 400; src: url(fixture-web.woff2) format("woff2"); unicode-range: U+0000-00FF; }';
 const SPRITE = '<svg xmlns="http://www.w3.org/2000/svg"><symbol id="icon-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle></symbol></svg>';
@@ -46,6 +47,7 @@ export async function startServer() {
     if (req.url.startsWith('/fonts/')) { res.writeHead(200, { 'content-type': 'text/css' }); res.end(FONT_CSS); return; }
     // the fixture's same-origin @font-face file: a few bytes are enough for capture.mjs to keep a copy
     if (req.url.startsWith('/fixture.woff2')) { res.writeHead(200, { 'content-type': 'font/woff2' }); res.end(Buffer.from('wOF2fixture')); return; }
+    if (req.url.startsWith('/form-app/i/')) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(BELL); return; }
     if (req.url.startsWith('/sprite.svg') || req.url.startsWith('/bell.svg')) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(req.url.startsWith('/sprite') ? SPRITE : BELL); return; }
     res.writeHead(200, { 'content-type': 'text/html' });
     if (req.url.startsWith('/uk-sign-in')) { res.end('<!doctype html><html lang="uk"><head><meta charset="utf-8"><title>Вхід</title></head><body><main><h1>Увійти до акаунту</h1><button type="button">Далі</button></main></body></html>'); return; }
@@ -64,6 +66,9 @@ export async function startServer() {
     // a product that signs out when its tab closes: a pagehide beacon and a keepalive POST, as such products send them
     if (req.url.startsWith('/bye')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title>Bye</title></head><body><main><h1>Account</h1><button type="button" id="more">More</button><p id="t">Details</p></main><script>document.getElementById("more").onclick=()=>{document.getElementById("t").textContent="More details";};addEventListener("pagehide",()=>{navigator.sendBeacon("/bye/api/sign-out");fetch("/bye/api/tab-closed",{method:"POST",keepalive:true}).catch(()=>{});});</script></body></html>'); return; }
     if (req.url.startsWith('/actions')) { res.end(actionsHtml); return; }
+    // a record form that asks to save when left changed, under a "connection problem" message that answers every
+    // blocked write (fixtures/form-app.html)
+    if (req.url.startsWith('/form-app')) { res.end(formAppHtml); return; }
     if (req.url.startsWith('/menu')) { res.end(MENU); return; }
     if (req.url.startsWith('/workbench-index')) { res.end('<!doctype html><html><head><meta charset="utf-8"><title></title></head><body><main data-workbench-index><h1>Screens</h1><a href="#/x">x</a></main></body></html>'); return; }
     // R28.1: a prototype page without the product's prototype-only top bar — its content starts at the top of the page

@@ -133,12 +133,65 @@ export function clickFailure(e) {
   return over ? over.trim().replace(/^-\s*/, '').slice(0, 220) : lines[0].slice(0, 160);
 }
 
+// A window the product opens to ask whether to save what was changed ("This record has unsaved changes do you want to
+// save it?" Yes / No). A map that pressed a form's own controls (a date field's calendar button) leaves the form
+// changed, and the way back meets this window: found on the first designer's product, where every later press was
+// blocked by it. It is answered without saving: No / Don't save / Discard / Leave, else the window's own Cancel or
+// Close (the form then stays changed: the caller stops). In the page: the question, the answers offered, and the
+// answer chosen, marked for a real click.
+export const SAVE_ASK = /\b(unsaved|not (yet |been )?saved|save (the |your |these |all |any )?changes|(want|wish|like) to save|discard (the |your |these |all )?changes|changes (will be lost|you made|have not been saved))/i;
+export const SAVE_NO = /^(no|don'?t save|do not save|discard|discard changes|leave|leave page|leave without saving|close without saving)$/i;
+const SAVE_STAY = /^(cancel|close|×|✕|x)$/i;
+const SAVE_FIND = ({ ask, no, stay }) => {
+  const [askRe, noRe, stayRe] = [ask, no, stay].map((s) => new RegExp(s, 'i'));
+  const vis = (e) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+  const name = (b) => (b.innerText || b.value || b.getAttribute('aria-label') || b.getAttribute('title') || '').trim().replace(/\s+/g, ' ');
+  for (const t of document.querySelectorAll('body *')) {
+    if (!vis(t) || ![...t.childNodes].some((n) => n.nodeType === 3 && askRe.test(n.textContent))) continue;
+    // the window that holds the question and its answers: it, or the nearest of six ancestors, with two answers or
+    // more (a button, or anything short that draws a pointer cursor)
+    for (let box = t, i = 0; box && box !== document.body && i < 7; box = box.parentElement, i++) {
+      const btns = [...box.querySelectorAll('*')].filter((b) => vis(b) && (b.matches('button, [role="button"], input[type="button"], a[href], [onclick]') || getComputedStyle(b).cursor === 'pointer') && name(b).length <= 30 && !b.querySelector('button, [role="button"]'));
+      if (btns.length < 2) continue;
+      const pick = btns.find((b) => noRe.test(name(b))) || btns.find((b) => stayRe.test(name(b)));
+      document.querySelectorAll('[data-ds-from-app-answer]').forEach((e) => e.removeAttribute('data-ds-from-app-answer'));
+      if (pick) pick.setAttribute('data-ds-from-app-answer', '');
+      return { question: t.innerText.trim().replace(/\s+/g, ' ').slice(0, 160), answers: [...new Set(btns.map(name).filter(Boolean))].slice(0, 6), answer: pick ? name(pick) : null };
+    }
+  }
+  return null;
+};
+const SAVE_ARGS = { ask: SAVE_ASK.source, no: SAVE_NO.source, stay: SAVE_STAY.source };
+export const savePromptOpen = async (page) => Boolean(await page.evaluate(SAVE_FIND, SAVE_ARGS).catch(() => null));
+// null when no such window is open; else { question, answers, answer, stayed }: answer is the name pressed (null:
+// nothing safe to press, nothing pressed), stayed: it was the window's Cancel, so the form is still changed.
+export async function answerSavePrompt(page, settle = 400) {
+  const found = await page.evaluate(SAVE_FIND, SAVE_ARGS).catch(() => null);
+  if (!found) return null;
+  if (!found.answer) return { ...found, stayed: true };
+  try { await page.locator('[data-ds-from-app-answer]').first().click({ timeout: 5000 }); } catch (e) { return { ...found, answer: null, stayed: true, why: clickFailure(e) }; }
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(settle);
+  await page.evaluate(() => document.querySelectorAll('[data-ds-from-app-answer]').forEach((e) => e.removeAttribute('data-ds-from-app-answer'))).catch(() => {});
+  return { ...found, stayed: !SAVE_NO.test(found.answer) };
+}
+
+// Whether any of these selectors matches a visible element now.
+export async function anyVisible(page, selectors) {
+  for (const sel of selectors || []) if (await page.locator(sel).filter({ visible: true }).count().catch(() => 0)) return true;
+  return false;
+}
+
 // --dismiss '<selector>' (repeatable): close what a product leaves over the page (an in-app window Escape does not
 // close, a late "connection problem" message) by its own close control, whenever one is visible. Each match is
-// judged like any click: a control whose name reads like an action on data is refused, not pressed.
-export async function dismiss(page, selectors, settle = 400) {
+// judged like any click: a control whose name reads like an action on data is refused, not pressed. A press that
+// makes the product ask to save (a back control over a changed form) ends the rounds: the caller answers it.
+// `cover`: the --dismiss-late messages, which come at any time: one that took a click is closed, and the click made once
+// more (the first designer's product posts a log every few seconds, and answers each blocked post with its message).
+export async function dismiss(page, selectors, settle = 400, cover = []) {
   let n = 0;
   for (let round = 0; round < 6 && selectors.length; round++) {
+    if (round && (await savePromptOpen(page))) break;
     let hit = null;
     for (const sel of selectors) { const l = page.locator(sel).filter({ visible: true }).first(); if (await l.count().catch(() => 0)) { hit = l; break; } }
     if (!hit) break;
@@ -150,7 +203,10 @@ export async function dismiss(page, selectors, settle = 400) {
     // "Cancel subscription" stay refused): found on the first designer's product, whose create dialog has a Cancel
     const wayOut = inDialog && /^(cancel|close)$/i.test(name);
     if (!wayOut && (UNSAFE.test(name) || REVEAL.test(name))) throw new Error(`--dismiss: refused — "${name}" could change data or unmask something; dismiss by the window's close control instead`);
-    try { await hit.click({ timeout: 5000 }); } catch { break; }
+    try { await hit.click({ timeout: 5000 }); } catch {
+      if (!cover.length || !(await dismiss(page, cover, settle))) break;
+      try { await hit.click({ timeout: 5000 }); } catch { break; }
+    }
     n++;
     await page.waitForTimeout(settle);
   }

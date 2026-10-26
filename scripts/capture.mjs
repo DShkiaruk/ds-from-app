@@ -28,14 +28,15 @@
  *   node scripts/capture.mjs --url https://app.example.com/home --click '<nav item>' --as-screen --screen orders
  *        (a SCREEN reached by clicks at a URL other screens share — a single-URL app — not a surface on top of one)
  *
- * Exit codes: 0 captured · 2 navigation failed · 3 nothing visible captured · 4 redirected to another screen.
+ * Exit codes: 0 captured · 2 navigation failed · 3 nothing visible captured · 4 redirected to another screen, or the
+ * product asks to save a changed form and offers no answer that leaves without saving.
  */
 
 import { launch, headlessFor } from './lib/browser.mjs';
 import { openWindow, connectWindow, closeWindow, signedInTab, rememberTab, lockWindow, emulate, fullShot } from './lib/window.mjs';
 import { mkdirSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, answerSavePrompt, anyVisible, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { readSessionStorage, restoreSession } from './lib/session.mjs';
 
 // ── properties we read. Fixed on purpose: a capture whose property list drifts
@@ -108,8 +109,9 @@ function args(argv) {
     else if (a === '--here') o.here = true;
     // what the product leaves over the page, closed by its own close control whenever one is visible (lib/safety.mjs
     // dismiss), repeatable: --dismiss before the clicks (a window an earlier run left open, a back button to the
-    // screen's start); --dismiss-late after the clicks, before the walk and the screenshot (a message that comes late,
-    // over the surface) — never the surface the clicks opened, so it is a flag of its own.
+    // screen's start); --dismiss-late before every click and after the clicks, before the walk and the screenshot, and
+    // again if it came during them (a message that comes at any time, over the surface) — never the surface the clicks
+    // opened, so it is a flag of its own.
     else if (a === '--dismiss') (o.dismiss ||= []).push(next());
     else if (a === '--dismiss-late') (o.dismissLate ||= []).push(next());
     // elements whose hover / focus / pressed states the rebuild needs, sampled before any other (repeatable)
@@ -779,12 +781,32 @@ if (!o.here) {
   }
 }
 const dismissed = { before: 0, late: 0 };
-try { dismissed.before = await dismiss(page, o.dismiss || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
+// The product asks whether to save a form an earlier run changed (a back control over it, lib/safety.mjs
+// answerSavePrompt): answered without saving, and recorded. One with no such answer stops the capture.
+const savePrompts = [];
+const answerPrompt = async () => {
+  // a page load the answer starts is held like any other, and is not the click before it
+  const held = heldNav;
+  const a = await answerSavePrompt(page, Math.min(o.settle, 800));
+  heldNav = held;
+  if (!a) return;
+  savePrompts.push({ question: a.question, answers: a.answers, answered: a.answer ?? null });
+  if (a.stayed) { console.error(`stopped: the product asks to save a changed form ("${a.question}"; ${a.answers.join(' / ')}) and offers no answer that leaves without saving${a.answer ? `: answered "${a.answer}", nothing saved` : ''}. Ask the designer to leave the form without saving in the window, then capture again.`); await browser.close(); process.exit(4); }
+  console.error(`warning: the product asked to save a changed form ("${a.question}"): answered "${a.answer}", nothing saved — an earlier press changed it; say so in your report`);
+};
+const lateClose = async () => { try { return await dismiss(page, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); } };
+// a message over the page first: it would take the click of a --dismiss back control
+dismissed.late += await lateClose();
+try { dismissed.before = await dismiss(page, o.dismiss || [], 400, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
+await answerPrompt();
 const clicked = [];
 for (const sel of o.clicks || []) {
+  // a message that comes at any time, closed before every click (it covered the next one: the first designer's product)
+  dismissed.late += await lateClose();
+  await answerPrompt();
   // the first VISIBLE match: a page can hold a hidden copy of its menu (a workspace tab not shown) under the same id
   const el = page.locator(sel).filter({ visible: true }).first();
-  if (!(await el.count()) && (o.dismiss || []).includes(sel)) continue; // a --click that is also a --dismiss: only there when what it closes is
+  if (!(await el.count()) && [...(o.dismiss || []), ...(o.dismissLate || [])].includes(sel)) continue; // a --click that is also a --dismiss: only there when what it closes is
   if (!(await el.count())) { console.error(`--click ${sel}: nothing visible matches — the surface behind it was not reached`); await browser.close(); process.exit(2); }
   const info = await el.evaluate((n) => ({ type: n.getAttribute('type'), inForm: Boolean(n.closest('form')), text: (n.innerText || n.getAttribute('aria-label') || '').trim().slice(0, 80), tag: n.tagName.toLowerCase(), icon: n.querySelector('[data-icon]')?.getAttribute('data-icon') || '' }));
   if ((REVEAL.test(info.text) || REVEAL_ICON.test(info.icon)) && !o.allowReveal) { console.error(`--click ${sel}: refused — "${info.text || info.icon}" unmasks something the page hides; the capture and its screenshot would hold it. --allow-reveal only on a product with nothing secret behind it.`); await browser.close(); process.exit(2); }
@@ -796,6 +818,7 @@ for (const sel of o.clicks || []) {
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(Math.min(o.settle, 800));
   if (heldNav) { console.error(`--click ${sel}: it would load another page (${new URL(heldNav).pathname}) — held: in --here mode a page load would sign this product out. Reach the surface another way.`); await browser.close(); process.exit(2); }
+  await answerPrompt();
   clicked.push({ selector: sel, text: info.text, urlBefore: before, urlAfter: page.url() });
 }
 if (o.rootClass || o.rootAttr) {
@@ -809,8 +832,14 @@ if (o.rootClass || o.rootAttr) {
 // --dismiss-late: a message that came after the clicks, closed before the walk — so neither the element list nor the
 // screenshot holds it (it ran before the screenshot only, and the walk kept the message: found on the first designer's
 // product, whose parity then asked the rebuild for the message's OK).
-try { dismissed.late = await dismiss(page, o.dismissLate || []); } catch (e) { console.error(e.message); await browser.close(); process.exit(2); }
-const walk = await page.evaluate(PAGE_WALK, { props: PROPS, inherited: [...INHERITED] });
+// A message that comes at any time can come during the walk: closed, and the walk made again (up to three times).
+dismissed.late += await lateClose();
+let walk = await page.evaluate(PAGE_WALK, { props: PROPS, inherited: [...INHERITED] });
+for (let k = 0; k < 3 && (await anyVisible(page, o.dismissLate)); k++) {
+  dismissed.late += await lateClose();
+  dismissed.retaken = (dismissed.retaken || 0) + 1;
+  walk = await page.evaluate(PAGE_WALK, { props: PROPS, inherited: [...INHERITED] });
+}
 // Icons that live in another file — a sprite symbol, an <img> svg — fetched from the page's own origin, read-only.
 const externalIcons = await page.evaluate(async ({ refs, imgs }) => {
   const out = [];
@@ -888,6 +917,16 @@ const shot = join(o.out, `${screen}--${o.viewport}--${o.scheme}.png`);
 // and the reconstruction was right. A screenshot that postdates the rects cannot be
 // used to check them.
 await (attachedCdp ? fullShot(attachedCdp, shot) : page.screenshot({ path: shot, fullPage: true })).catch(() => {});
+// ... and between the walk and the screenshot (the product's answer to the walk's own icon and font reads): closed,
+// and the walk and the screenshot made again, so the two still describe one moment
+for (let k = 0; k < 2 && (await anyVisible(page, o.dismissLate)); k++) {
+  dismissed.late += await lateClose();
+  dismissed.retaken = (dismissed.retaken || 0) + 1;
+  // the declared faces keep the copies made of their files above
+  walk = { ...(await page.evaluate(PAGE_WALK, { props: PROPS, inherited: [...INHERITED] })), fontFacesDeclared: walk.fontFacesDeclared };
+  await (attachedCdp ? fullShot(attachedCdp, shot) : page.screenshot({ path: shot, fullPage: true })).catch(() => {});
+}
+if (await anyVisible(page, o.dismissLate)) console.error(`warning: a --dismiss-late message kept coming back during the capture: the screenshot or the element list may hold it — capture again`);
 await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
 
 const cdp = await context.newCDPSession(page).catch(() => null);
@@ -926,6 +965,8 @@ const capture = {
     // no page load (--here): the tab as it was, then the clicks
     noReload: o.here || undefined,
     dismissed: dismissed.before || dismissed.late ? dismissed : undefined,
+    // the product asked to save a changed form, answered without saving
+    savePrompts: savePrompts.length ? savePrompts : undefined,
     blockedWrites: blockedWrites ? blockedWrites.map((b) => `${b.method} ${new URL(b.url).pathname}`) : undefined,
     readsAllowed: o.blockWrites ? o.reads ?? null : undefined,
     socketReadsAllowed: o.blockWrites ? o.socketReads ?? null : undefined,

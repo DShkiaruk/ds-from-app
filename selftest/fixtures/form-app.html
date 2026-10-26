@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Form app</title>
+<style>
+body{margin:0;font:14px/20px sans-serif}
+nav{display:flex;gap:8px;padding:8px}
+main{padding:16px}
+.msgwin,.confirmwindow{position:fixed;inset:0;background:rgba(255,255,255,.95);z-index:20;padding:40px}
+.cal{display:inline-block;width:16px;height:16px;background:#bbb;cursor:pointer}
+</style></head>
+<body>
+<nav><button type="button" id="m-list" data-key="list">Documents</button><button type="button" id="m-rec" data-key="record">Record</button></nav>
+<main id="app"></main>
+<script>
+// A product whose record form counts itself changed when a press sets a field, and asks whether to save it when the
+// form is left (Yes / No); it tracks what is opened with a write, and answers every write that fails with a
+// "connection problem" message over the page (the first designer's product, 2026-10-26).
+let screen = 'list', dirty = false;
+window.answers = [];
+const app = document.getElementById('app');
+const data = { no: 'A-1', date: '2026-10-01', party: 'Acme' };
+function message() { if (document.querySelector('.msgwin')) return; const w = document.createElement('div'); w.className = 'msgwin'; w.innerHTML = '<p>Internet Connection Problem</p><button type="button" id="msg-ok-1">OK</button>'; document.body.append(w); w.querySelector('button').onclick = () => w.remove(); }
+function track() { fetch('/form-app/api/track', { method: 'POST' }).catch(() => message()); }
+function render() {
+  if (screen === 'list') { app.innerHTML = '<h1>Documents</h1><img src="/form-app/i/doc.svg" alt="" width="16" height="16"><p>2 documents</p>'; return; }
+  app.innerHTML = '<h1>Record</h1><div class="toolbar"><button type="button" id="defaults">Fill defaults</button><button type="button" id="details">Details</button></div>'
+    + '<div class="form"><div class="field"><label for="f-no">No.</label><input id="f-no"></div>'
+    + '<div class="field"><label for="f-date">Date</label><input id="f-date"><span class="cal"></span></div>'
+    + '<div class="field"><label for="f-party">Party</label><input id="f-party"><button type="button" class="lookup" aria-label="Find party">…</button></div></div>'
+    + '<p id="more" hidden>Created by the import</p><div class="footer"><button type="button" id="copy">Copy from last</button></div>';
+  for (const k of ['no', 'date', 'party']) { const f = document.getElementById('f-' + k); f.value = data[k]; f.oninput = () => { dirty = true; }; }
+  const set = (k, v) => { document.getElementById('f-' + k).value = v; dirty = true; };
+  document.getElementById('defaults').onclick = () => set('date', '2026-10-26');
+  document.getElementById('copy').onclick = () => set('party', 'Globex');
+  document.querySelector('.cal').onclick = () => set('date', '2026-10-15');
+  document.querySelector('.lookup').onclick = () => set('party', 'Initech');
+  document.getElementById('details').onclick = () => { const m = document.getElementById('more'); m.hidden = !m.hidden; document.querySelector('h1').textContent = m.hidden ? 'Record' : 'Record details'; track(); };
+  track();
+}
+function go(to) {
+  if (screen === 'record' && dirty) {
+    // window.saveOrStay: the question offers Save / Cancel only (no way to leave without saving)
+    const [yes, no] = window.saveOrStay ? ['Save', 'Cancel'] : ['Yes', 'No'];
+    const w = document.createElement('div'); w.className = 'confirmwindow';
+    w.innerHTML = `<p>This record has unsaved changes do you want to save it?</p><button type="button" id="cw-yes">${yes}</button><button type="button" id="cw-no">${no}</button>`;
+    document.body.append(w);
+    w.querySelector('#cw-yes').onclick = () => { window.answers.push(yes); fetch('/form-app/api/save', { method: 'POST' }).catch(() => message()); w.remove(); dirty = false; screen = to; render(); };
+    w.querySelector('#cw-no').onclick = () => { window.answers.push(no); w.remove(); if (window.saveOrStay) return; dirty = false; screen = to; render(); };
+    return;
+  }
+  screen = to; render();
+}
+document.querySelectorAll('[data-key]').forEach((b) => { b.onclick = () => go(b.dataset.key); });
+// The capture reads the page's own icon files after its element walk: the message comes then, after the walk and before
+// the screenshot (a message that comes at any time, made to come at a known one).
+const f0 = window.fetch;
+window.fetch = function (u, init) { if (String(u).includes('/form-app/i/')) setTimeout(message, 0); return f0.call(this, u, init); };
+render();
+</script></body></html>

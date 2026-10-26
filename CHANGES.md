@@ -1,5 +1,36 @@
 # Changes
 
+## 0.2.7 — 2026-10-26
+
+The first designer's report, item 11, found with 0.2.6: re-mapping a record screen pressed the form's own controls (a
+date field's calendar button), the form counted itself changed, and on the way back the product asked whether to save
+it, which blocked every later press. Nothing was saved (writes are blocked), but a map must never leave a product one
+click from a save.
+- **A form is left as it was found.** `flows.mjs` refuses a control that belongs to a field of a form holding values (a
+  date picker's button, a lookup's "…", a select's arrow); `--press-fields` lifts it. A press that changes a field anyway (its value, or the
+  framework's "changed" mark) is recorded as `edited` and not made again in the run.
+- **The question to save is answered without saving.** When the product asks ("… has unsaved changes, do you want to
+  save it?"), `flows.mjs` and `capture.mjs` press No / Don't save / Discard and record it (`savePrompt` on the press
+  before it, `savePrompts`). A question that offers only Save and Cancel stops the run (exit 4) and names the press. A
+  map with no page load ends with the way back to its first screen, so no question is left open.
+- **A message that comes at any time.** The product's "connection problem", its answer to a blocked write, came while
+  a record was open, not only after a press. `--dismiss-late` now works in `flows.mjs` too: closed before every click
+  of the way back, after every press (before its effect is read: `closedMessage`), never pressed as a control of the
+  screen, and a click it took is made once more. In `capture.mjs` it is closed before every `--click`, and when it
+  comes during the walk or between the walk and the screenshot, both are made again (`dismissed.retaken`).
+- **A worse map does not replace a better one.** When a screen the last map reached is not reached now, `flows.mjs`
+  keeps `flows.json`, writes the new map to `flows/flows.new.json` and exits 5 (`--accept-unreachable` replaces it).
+- A fixture product with a record form that asks to save and a message over the page: five selftests, which fail on
+  0.2.6.
+- **Checked on the live product, and fixed before release.** The product posts a log every few seconds and answers each
+  blocked post with its message, so the message took the click of the way back's own back control and the record
+  stayed open over the menu: the message is now closed before `--dismiss` too, and a `--dismiss` click it took is made
+  once more. A required lookup and two selects with empty values were still pressed: the controls of every field of a
+  form that holds values are refused now, not only those of a filled field. With `--press-fields` the calendar button
+  made the product ask whether to save the record's unsaved changes, answered No; it had changed no
+  value, the product counted it changed anyway, which is why such controls are refused before they are pressed. Every
+  write the product tried (a save of the record among them) was blocked.
+
 ## 0.2.6 — 2026-10-23
 
 The first designer's field report after rebuilding a seven-screen flow with 0.2.5: ten findings, all addressed.

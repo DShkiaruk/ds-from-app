@@ -72,10 +72,24 @@ compare the screenshots — a setting the product remembers (a collapsed menu) i
    remembers (a list that hides its start page), take `--dismiss '<its own close or back control>'` (repeatable;
    clicked whenever visible, before the clicks in `capture.mjs`, before every way back in `flows.mjs`). A failed click
    names the layer that took it (`<div id=…> intercepts pointer events`): look at it and dismiss it. A product that
-   reports "a connection problem" when a blocked write fails shows its message after many presses: dismiss its OK, and
-   say in your report that the message comes from the write block, not from the product. `--dismiss-late` closes a
-   message that comes after the clicks, before the element walk and the screenshot (never the surface the clicks
-   opened). A plain "Cancel" or "Close" inside a dialog may be a `--dismiss`; "Cancel order" and the like stay refused.
+   reports "a connection problem" when a blocked write fails shows its message at any time: give its OK as
+   `--dismiss-late` (in `capture.mjs` and in `flows.mjs`), not `--dismiss`. It is then closed before every click, after
+   every press, and again when it comes during a capture's walk or screenshot (both are made again); `flows.mjs` never
+   presses it as one of the screen's controls. Say in your report that the message comes from the write block, not
+   from the product. `--dismiss` is for what the way back must close (a window left open, a back control), never the
+   surface the clicks opened. A plain "Cancel" or "Close" inside a dialog may be a `--dismiss`; "Cancel order" and the
+   like stay refused.
+   **A form is left as it was found.** `flows.mjs` refuses the controls of a form's fields when the form holds values (a
+   date field's calendar button, a lookup's "…", a select's arrow): a press of one can leave the form changed. Lift it with `--press-fields` only when the
+   designer agrees. A press that changes a field anyway is recorded (`edited`) and made once. When the product asks
+   whether to save ("… has unsaved changes, do you want to save it?"), both tools answer it without saving (No, Don't
+   save, Discard) and record it (`savePrompt`, `savePrompts`). Never answer Yes or Save yourself. A question that offers
+   only Save and Cancel stops the run (exit 4): ask the designer to leave the form without saving in the window, then
+   run again with the `--deny-selector` it prints. A map with no page load ends with the way back to its first screen,
+   so no question to save is left open. `flows.mjs` keeps the old `flows.json` when a screen the last map reached is
+   not reached now (exit 5): the new map is in `flows/flows.new.json`. Find what stands in the way (a message:
+   `--dismiss-late`; a choice the product remembers; a form left changed) and run again. `--accept-unreachable` replaces
+   the file anyway, only when the designer says that screen is gone.
    A `--click` that is also a `--dismiss` selector is skipped when nothing matches it. Wait long enough for a form that
    loads (`--settle 3000`): a capture of "Loading…" is not the state. `--deny-selector` refuses a control that a CSS
    selector matches, itself or a wrapper of it. A screen only a page load shows (the view right after sign-in) is

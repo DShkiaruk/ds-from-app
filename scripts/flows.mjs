@@ -36,8 +36,21 @@
 // --deny <regex>: the opposite — a control whose whole name matches is refused although nothing above catches it (an
 // export that opens the print dialog, a "Copy" that would put a credential on the clipboard). Listed under `refused`.
 //
+// A form is left as it was found. A control that belongs to a field of a form holding values (a date field's calendar
+// button, a lookup's "…") is refused: a press of it can leave the form changed, one click from a save (--press-fields lifts it).
+// A press that changes a field anyway (its value, or the framework's "changed" mark) is recorded (`edited`) and not
+// made again in the run. When the product then asks whether to save ("… has unsaved changes, do you want to save
+// it?"), it is answered without saving (No / Don't save / Discard), and the question is recorded (`savePrompt`,
+// `savePrompts`); a question with no such answer stops the map (exit 4). Found on the first designer's product, whose
+// record form asked to save after the map pressed its calendar button, and blocked every later press.
+// --dismiss-late '<selector>': a message that comes at any time (the product's "connection problem", its answer to a
+// blocked write), closed before every click and after every press, and never pressed as one of the screen's controls.
+// A map that would replace flows.json with one in which a screen reached before is not reached now keeps the old file,
+// writes the new one to flows/flows.new.json and exits 5 (--accept-unreachable replaces it anyway).
+//
 // Usage: node scripts/flows.mjs <product-repo> [--storage auth.json] [--url <screen url> …] [--viewport 1440x900]
 //        [--landmark '<css>'] [--allow '<regex>'] [--deny '<regex>'] [--only <screen name> …] [--allow-writes (fixture/sandbox only)] [--reads '<regex>'] [--socket-reads '<regex over the socket URL>']
+//        [--attach <slug> [--no-reload --home '<selector>' …]] [--dismiss '<selector>' …] [--dismiss-late '<selector>' …] [--deny-selector '<selector>' …] [--press-fields] [--accept-unreachable]
 // Writes <repo>/flows/flows.json and a screenshot of every state reached (flows/<screen>--<n>.png).
 
 import { launch } from './lib/browser.mjs';
@@ -45,7 +58,7 @@ import { connectWindow, signedInTab, lockWindow, emulate } from './lib/window.mj
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { product, here } from './lib/product.mjs';
-import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
+import { UNSAFE, REVEAL, REVEAL_ICON, OUTLIVING_WRITES, clickFailure, dismiss, answerSavePrompt, blockWrites, blockedSummary, socketSummary, platformSummary, looksLikeBotCheck, BOT_CHECK_ADVICE } from './lib/safety.mjs';
 import { restoreSession } from './lib/session.mjs';
 
 const args = process.argv.slice(2);
@@ -64,14 +77,44 @@ const DENY_SELECTORS = new Set(many('--deny-selector'));
 // closest), not only the selector string flows.json printed: 'img.SidebarCollapseButton' matched nothing as a string
 // and the press collapsed the menu (found on the first designer's product).
 let deniedNow = new Set();
-const markDenied = async (list) => {
-  if (!DENY_SELECTORS.size || !list.length) return;
-  const hit = await page.evaluate(({ sels, list }) => list.filter((q) => {
+// The listed controls (selectors as flows.json prints them) whose element one of `sels` matches, itself or a wrapper.
+const matching = async (sels, list) => (sels.length && list.length ? page.evaluate(({ sels, list }) => list.filter((q) => {
+  let el; try { el = document.querySelector(q); } catch { return false; }
+  return el && sels.some((x) => { try { return el.matches(x) || Boolean(el.closest(x)); } catch { return false; } });
+}), { sels, list }).catch(() => []) : []);
+// In the page: the listed controls that belong to a field of a form that holds values — the field itself, or a control
+// beside it (the nearest of three ancestors holding fields holds one or two: a date field and its calendar button, a
+// lookup and its "…", a select's arrow), filled or empty: an empty required lookup of a record is still that record's
+// (found on the first designer's product). A form is a <form> with a value in it, or a container whose fields hold two
+// typed values or more (a record's edit view; a filter bar of selects is not one).
+const FIELD_CONTROLS = (list) => {
+  const EDIT = 'input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="image"]):not([type="file"]):not([type="range"]):not([type="color"]), textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"], [role="combobox"], [role="spinbutton"]';
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
+  const value = (f) => String((f.matches('input, textarea, select') ? f.value : f.innerText) ?? '').trim();
+  const typed = (f) => f.matches('input, textarea, [contenteditable="true"], [contenteditable=""]') && !f.readOnly && !f.disabled && value(f) !== '';
+  const fieldsIn = (n) => [...n.querySelectorAll(EDIT)].filter(vis);
+  return list.filter((q) => {
     let el; try { el = document.querySelector(q); } catch { return false; }
-    return el && sels.some((x) => { try { return el.matches(x) || Boolean(el.closest(x)); } catch { return false; } });
-  }), { sels: [...DENY_SELECTORS], list }).catch(() => []);
-  for (const q of hit) deniedNow.add(q);
+    if (!el) return false;
+    let field = el.matches(EDIT) ? [el] : null;
+    for (let n = el.parentElement, i = 0; !field && n && n !== document.body && i < 3; n = n.parentElement, i++) { const fs = fieldsIn(n); if (fs.length) field = fs.length <= 2 ? fs : []; }
+    if (!field?.length) return false;
+    const form = el.closest('form, [role="form"]');
+    if (form) return fieldsIn(form).some((f) => value(f) !== '');
+    for (let n = field[0].parentElement; n && n !== document.body; n = n.parentElement) if (fieldsIn(n).filter(typed).length >= 2) return true;
+    return false;
+  });
 };
+// what this screen holds that the map does not press: --dismiss-late messages, controls of the fields of a form holding values
+let lateNow = new Set(), fieldNow = new Set();
+const markDenied = async (list) => {
+  for (const q of await matching([...DENY_SELECTORS], list)) deniedNow.add(q);
+  for (const q of await matching(DISMISS_LATE, list)) lateNow.add(q);
+  if (!PRESS_FIELDS && list.length) for (const q of await page.evaluate(FIELD_CONTROLS, list).catch(() => [])) fieldNow.add(q);
+};
+// controls whose press changed a form field, or made the product ask to save: pressed once, refused after (by selector
+// and name)
+const editedNow = new Map();
 const ONLY = many('--only');
 // --no-reload (with --attach): no page load at all, for a product that signs out on every one. A screen is reached by
 // --home (a click chain to a known place: a menu item, repeatable) and then its capture's own clicks; between presses
@@ -82,6 +125,9 @@ const HOME = many('--home');
 // --dismiss '<selector>': what a press leaves over the page (an in-app window Escape does not close), closed by its own
 // close control before every way back to a screen (lib/safety.mjs dismiss). Repeatable.
 const DISMISS = many('--dismiss');
+const DISMISS_LATE = many('--dismiss-late');
+const PRESS_FIELDS = args.includes('--press-fields');
+const ACCEPT_LOST = args.includes('--accept-unreachable');
 
 // The screens: explicit --url, else every distinct resting URL the baseline captures were taken at, plus every capture
 // taken --as-screen (a screen reached by clicks at a URL other screens share).
@@ -182,7 +228,18 @@ const SNAP = (landmark) => {
   const mark = landmark
     ? [...document.querySelectorAll(landmark)].filter(vis).map(text).filter(Boolean).join(' | ')
     : ['main h1', 'h1', '[role="heading"][aria-level="1"]'].map((q) => [...document.querySelectorAll(q)].filter(vis).map(text).find(Boolean)).find(Boolean) ?? '';
-  return { url: location.href, elements: document.querySelectorAll('body *').length, text: document.body.innerText.length, textHash: [...document.body.innerText].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0), surfaces, landmark: mark };
+  // every form field's value, hashed, by its id / name / label: a press that changes one edited the form
+  const fields = {}, seen = {};
+  for (const f of document.querySelectorAll('input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="checkbox"], [role="switch"]')) {
+    if (/^(button|submit|reset|hidden|image|file)$/i.test(f.getAttribute('type') || '')) continue;
+    const k = f.id || f.getAttribute('name') || f.getAttribute('aria-label') || f.getAttribute('placeholder') || f.tagName.toLowerCase();
+    seen[k] = (seen[k] || 0) + 1;
+    const v = f.matches('input[type="checkbox"], input[type="radio"]') ? String(f.checked) : f.matches('input, textarea, select') ? f.value : f.getAttribute('aria-checked') ?? f.innerText;
+    fields[seen[k] > 1 ? `${k}#${seen[k]}` : k] = [...String(v ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
+  }
+  // fields the framework marks changed (Angular's ng-dirty)
+  const dirty = document.querySelectorAll('.ng-dirty').length;
+  return { url: location.href, elements: document.querySelectorAll('body *').length, text: document.body.innerText.length, textHash: [...document.body.innerText].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0), surfaces, landmark: mark, fields, dirty };
 };
 
 // --attach <name>: the window the designer signed in in (capture.mjs --keep-open, lib/window.mjs), for a product that
@@ -214,6 +271,9 @@ let ctx = null, page = null, heldNav = null;
 const opened = [];
 // why the last screen could not be reached by its clicks
 let openFail = null;
+// the control pressed last ({ name, icon, selector, rec: its record in flows.json }): what a lost way back, or the
+// product's question to save, is about
+let lastPress = null;
 const fresh = async (s) => {
   if (ATTACH) {
     if (page) return;
@@ -249,15 +309,59 @@ mkdirSync(join(P.spec, 'flows'), { recursive: true });
 const SIGNIN = /\/(log-?in|sign-?in|auth)\b/i;
 // One click of a screen's chain: the first VISIBLE match (a page can hold a hidden copy of its menu — a workspace tab
 // that is not shown — under the same id), and a click that fails says so instead of leaving the page where it was.
+// --dismiss-late: the messages that come at any time, closed now; how many were
+const late = async () => { try { return await dismiss(page, DISMISS_LATE); } catch (e) { console.error(e.message); process.exit(2); } };
+// A click; one that a --dismiss-late message took (it came just before) is made once more after closing the message.
+// The error, or null.
+const press = async (loc, timeout) => {
+  try { await loc.click({ timeout }); return null; } catch (e) {
+    if (!DISMISS_LATE.length || !(await late())) return e;
+    try { await loc.click({ timeout }); return null; } catch (e2) { return e2; }
+  }
+};
 const chainClick = async (sel) => {
   const l = page.locator(sel).filter({ visible: true }).first();
   // a click of the chain that is also a --dismiss selector (a message's OK the capture pressed) is there only when the
   // thing it closes is: skipped when nothing matches it
-  if (!(await l.count().catch(() => 0))) { if (DISMISS.includes(sel)) return true; openFail = { selector: sel, why: 'nothing visible matches it' }; return false; }
-  try { await l.click({ timeout: 10000 }); } catch (e) { openFail = { selector: sel, why: clickFailure(e) }; return false; }
+  if (!(await l.count().catch(() => 0))) { if (DISMISS.includes(sel) || DISMISS_LATE.includes(sel)) return true; openFail = { selector: sel, why: 'nothing visible matches it' }; return false; }
+  const err = await press(l, 10000);
+  if (err) { openFail = { selector: sel, why: clickFailure(err) }; return false; }
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(SETTLE);
   return true;
+};
+// The product asks whether to save what a press changed (lib/safety.mjs answerSavePrompt): answered without saving,
+// recorded on the press before it, and that press is not made again. A question with no answer that leaves without
+// saving stops the map (exit 4): the form is still changed. At the end of the run (ending) it is said, not a stop.
+// The question asked, or null.
+const savePrompts = [];
+let ending = false;
+const answerPrompt = async () => {
+  // a page load the answer starts is held like any other, and is not the click before it
+  const held = heldNav;
+  const a = await answerSavePrompt(page, SETTLE);
+  heldNav = held;
+  if (!a) return null;
+  const by = lastPress ? `pressing "${lastPress.name || lastPress.icon || ''}" (${lastPress.selector})` : 'an earlier press';
+  savePrompts.push({ question: a.question, answers: a.answers, answered: a.answer ?? null, after: lastPress ? { name: lastPress.name, icon: lastPress.icon || undefined, selector: lastPress.selector } : undefined });
+  if (lastPress?.rec) lastPress.rec.effect.savePrompt = { question: a.question, answered: a.answer ?? null };
+  if (lastPress) editedNow.set(`${lastPress.selector}|${lastPress.name}`, `the product asked to save after it ("${a.question}"): pressed once, not again`);
+  if (a.stayed) {
+    const what = `the product asks to save what ${by} changed ("${a.question}"; ${a.answers.join(' / ')}) and offers no answer that leaves without saving${a.answer ? `: answered "${a.answer}", nothing saved, the form is still changed` : ': nothing pressed'}`;
+    if (ending) { console.error(`  warning: ${what} — tell the designer to leave the form without saving in the window`); return a; }
+    console.error(`stopped: ${what}. Ask the designer to leave the form without saving in the window, then run again with --deny-selector '${lastPress?.selector ?? ''}'. flows.json was not written.`);
+    process.exit(4);
+  }
+  console.log(`  the product asked to save what ${by} changed ("${a.question}"): answered "${a.answer}", nothing saved — that control is not pressed again`);
+  return a;
+};
+// The fields a press changed: one that kept its key and changed its value, on a page that was not swapped for another,
+// or more fields the framework marks changed.
+const editedBy = (before, after) => {
+  if (after.url !== before.url || after.landmark !== before.landmark) return null;
+  const keys = Object.keys(after.fields).filter((k) => k in before.fields && before.fields[k] !== after.fields[k]);
+  const marked = after.dirty - before.dirty;
+  return keys.length || marked > 0 ? { fields: keys.slice(0, 8), markedChanged: marked > 0 ? marked : undefined } : null;
 };
 const openScreen = async (s) => {
   openFail = null;
@@ -265,16 +369,23 @@ const openScreen = async (s) => {
   if (NO_RELOAD) {
     // close what the last press opened, then the way back: --home, then the screen's own clicks
     for (let i = 0; i < 2; i++) await page.keyboard.press('Escape').catch(() => {});
-    try { await dismiss(page, DISMISS); } catch (e) { console.error(e.message); process.exit(2); }
+    // a message over the page first: it would take the click of the back control (found on the first designer's
+    // product, where the record stayed open under it and covered the menu)
+    await late();
+    await answerPrompt();
+    try { await dismiss(page, DISMISS, 400, DISMISS_LATE); } catch (e) { console.error(e.message); process.exit(2); }
+    await answerPrompt();
     const chain = [...HOME, ...s.clicks];
     if (!chain.length) { openFail = { selector: '(none)', why: 'no click chain reaches it: only a page load shows it — capture it with --here and a --click chain, or pass --home' }; return false; }
     // signed out in place: the tab asks for a password, and the screen's own capture did not — checked before the way
     // back (a signed-out page has no menu to click) and after it
     const own = caps.find((k) => k.meta.screen === s.name);
-    const signedOut = async () => { if (!own?.meta.looksLikeSignIn && (await page.locator('input[type="password"]').filter({ visible: true }).count().catch(() => 0))) { console.error(`signed out: ${s.name ?? s.url} shows a password field — the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH}) and run again; flows.json was not written`); process.exit(3); } };
+    const signedOut = async () => { if (!ending && !own?.meta.looksLikeSignIn && (await page.locator('input[type="password"]').filter({ visible: true }).count().catch(() => 0))) { console.error(`signed out: ${s.name ?? s.url} shows a password field — the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH}) and run again; flows.json was not written`); process.exit(3); } };
     await signedOut();
     heldNav = null;
-    for (const c of chain) if (!(await chainClick(c))) { await signedOut(); return false; }
+    // a message that comes at any time, and the product's question to save, before every click of the way back
+    for (const c of chain) { await late(); await answerPrompt(); if (!(await chainClick(c))) { await signedOut(); return false; } }
+    await late(); await answerPrompt();
     if (heldNav) { openFail = { selector: chain.at(-1), why: `it would load another page (${new URL(heldNav).pathname})` }; heldNav = null; return false; }
     await signedOut();
     return true;
@@ -288,8 +399,10 @@ const openScreen = async (s) => {
   const toSignIn = SIGNIN.test(landed) || (landed !== new URL(s.url).pathname && (await page.locator('input[type="password"]').count().catch(() => 0)) > 0);
   if (!SIGNIN.test(s.url) && toSignIn) { console.error(`session expired: ${s.name ?? s.url} opened the sign-in page (${landed}) — ${ATTACH ? `the window "${ATTACH}" is signed out: sign in again in it (capture.mjs --login-url … --keep-open ${ATTACH})` : 'refresh the session file'} and run again; flows.json was not written`); process.exit(3); }
   await page.waitForTimeout(SETTLE);
-  try { await dismiss(page, DISMISS); } catch (e) { console.error(e.message); process.exit(2); }
-  for (const c of s.clicks) if (!(await chainClick(c))) return false;
+  await late();
+  try { await dismiss(page, DISMISS, 400, DISMISS_LATE); } catch (e) { console.error(e.message); process.exit(2); }
+  for (const c of s.clicks) { await late(); if (!(await chainClick(c))) return false; }
+  await late();
   return true;
 };
 
@@ -320,9 +433,12 @@ const judge = (c, url, origin) => {
   if (c.href && !c.href.startsWith('#')) { try { if (new URL(c.href, url).origin !== origin) return { skip: 'another origin' }; } catch { /* relative */ } }
   // In a data row the name carries the row's data ("Edit Create your first guide"): the verb is its first word.
   const verb = c.inData ? c.name.split(' ')[0] : c.name;
+  if (lateNow.has(c.selector)) return { skip: "the product's message, closed by --dismiss-late" };
   if (DENY_SELECTORS.has(c.selector) || deniedNow.has(c.selector)) return { refuse: { role: c.role, name: c.name, selector: c.selector, why: 'denied for this product (--deny-selector)' } };
   if (DENY && c.name && DENY.test(c.name)) return { refuse: { role: c.role, name: c.name, why: 'denied for this product (--deny)' } };
   if (REVEAL.test(verb) || REVEAL_ICON.test(c.icon)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'unmasks something the page hides' } };
+  if (fieldNow.has(c.selector)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, selector: c.selector, why: 'belongs to a field of a form that holds values (a date picker, a lookup): a press can leave the form changed and the product asking to save — --press-fields lets the map press it' } };
+  if (editedNow.has(`${c.selector}|${c.name}`)) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, selector: c.selector, why: editedNow.get(`${c.selector}|${c.name}`) } };
   const risky = c.type === 'submit' || (c.inForm && c.role === 'button' && c.type !== 'button') || UNSAFE.test(verb) || (!c.name && UNSAFE.test(c.icon));
   if (risky && !(ALLOW && c.name && ALLOW.test(c.name) && c.type !== 'submit')) return { refuse: { role: c.role, name: c.name, icon: c.icon || undefined, why: 'could change data' } };
   return { allowed: risky };
@@ -353,16 +469,19 @@ const heldEffect = () => {
 // --no-reload: the screen cannot be reached again after a press. Nothing resets the page between presses, so the press
 // before changed it for good (another workspace tab, a collapsed menu): stop, and name it, rather than map the wrong
 // screen under this one's name.
-let lastPress = null;
 const lostWay = (s) => {
-  console.error(`stopped: after pressing ${lastPress ? `"${lastPress.name || lastPress.icon || ''}" (${lastPress.selector})` : 'the last control'}, ${s.name ?? s.url} can no longer be reached by its clicks (${openFail?.selector}: ${openFail?.why}). That press changed the page for good. Ask the designer to undo it in the window (or sign in again), then run again with --deny-selector '${lastPress?.selector ?? ''}'; a menu selector by its visible text also survives a hidden copy of the menu. flows.json was not written.`);
+  // a layer over the page with --dismiss given and no --dismiss-late: most likely a message that came after the way
+  // back's --dismiss (the first designer's "connection problem" came at any time while a record was open)
+  const covered = /intercepts pointer events/.test(openFail?.why || '') && DISMISS.length && !DISMISS_LATE.length ? ' If what covers it is a message that comes at any time (a "connection problem"), give its close control as --dismiss-late, not --dismiss: it is then closed before every click.' : '';
+  console.error(`stopped: after pressing ${lastPress ? `"${lastPress.name || lastPress.icon || ''}" (${lastPress.selector})` : 'the last control'}, ${s.name ?? s.url} can no longer be reached by its clicks (${openFail?.selector}: ${openFail?.why}). That press changed the page for good. Ask the designer to undo it in the window (or sign in again), then run again with --deny-selector '${lastPress?.selector ?? ''}'; a menu selector by its visible text also survives a hidden copy of the menu.${covered} flows.json was not written.`);
   process.exit(4);
 };
 let shots = 0;
 for (const s of screensIn) {
   const url = s.url;
   const id = s.name ?? url;
-  if (!(await openScreen(s))) { if (NO_RELOAD && lastPress) lostWay(s); console.log(`  ${id}: its clicks no longer reach it (${openFail?.selector}: ${openFail?.why}) — recapture`); screens.push({ url, name: s.name, clicks: s.clicks, unreachable: true, transitions: [] }); continue; }
+  lateNow = new Set(); fieldNow = new Set();
+  if (!(await openScreen(s))) { if (NO_RELOAD && lastPress) lostWay(s); console.log(`  ${id}: its clicks no longer reach it (${openFail?.selector}: ${openFail?.why}) — recapture`); screens.push({ url, name: s.name, clicks: s.clicks, unreachable: true, why: `${openFail?.selector}: ${openFail?.why}`, transitions: [] }); continue; }
   const origin = new URL(url).origin;
   const all = await page.evaluate(CONTROLS);
   const title = await page.evaluate(() => document.querySelector('h1')?.innerText?.trim() ?? document.title);
@@ -401,6 +520,7 @@ for (const s of screensIn) {
     control.before = await page.evaluate(SNAP, LANDMARK);
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(SETTLE);
+    await late(); // as after every press
     control.after = await page.evaluate(SNAP, LANDMARK);
     control.changed = control.after.elements !== control.before.elements || control.after.textHash !== control.before.textHash;
   }
@@ -420,14 +540,27 @@ for (const s of screensIn) {
     const tabsBefore = opened.length;
     const loc = await locate(c);
     if (!loc) { transitions.push({ control: ref, effect: { kind: 'unreachable' } }); continue; }
-    try { await loc.click({ timeout: 3000 }); } catch (e) { transitions.push({ control: ref, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
+    { const err = await press(loc, 3000); if (err) { transitions.push({ control: ref, effect: { kind: 'unclickable', why: clickFailure(err) } }); continue; } }
     await settle();
+    // the product's message (its answer to a blocked write) is closed before the effect is read: it is not what the
+    // control does; nor is a question to save, answered without saving
+    const closed = await late();
+    const asked = await answerPrompt();
     const after = await page.evaluate(SNAP, LANDMARK);
     const effect = heldEffect() ?? effectOf(before, after, id, own, origin);
+    if (closed) effect.closedMessage = closed;
+    if (asked) effect.savePrompt = { question: asked.question, answered: asked.answer ?? null };
+    const edit = effect.kind === 'navigate' ? null : editedBy(before, after);
+    if (edit) {
+      effect.edited = edit;
+      editedNow.set(`${c.selector}|${c.name}`, 'changed a form field when pressed: pressed once, not again');
+      console.log(`  ${id}: pressing "${c.name || c.icon || ''}" (${c.selector}) changed the form (${edit.fields.join(', ') || 'marked changed'}) — not pressed again; if the product asks to save, it is answered without saving`);
+    }
     if (opened.length > tabsBefore) { const t2 = opened[tabsBefore]; await t2.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {}); effect.newTab = t2.url(); if (effect.kind === 'none') effect.kind = 'navigate'; }
     if (effect.kind === 'change' && control.changed && after.elements === control.after.elements && after.textHash === control.after.textHash) { effect.kind = 'none'; effect.ownChange = 'the page ends the same with no press (control load)'; delete effect.addedElements; }
     if (effect.kind !== 'none' && effect.kind !== 'navigate') { const f = `flows/${(s.name || new URL(url).pathname).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'root'}--${++shots}.png`; await page.screenshot({ path: join(P.spec, f) }).catch(() => {}); effect.screenshot = f; }
     const t = { control: { ...ref, inData: c.inData, href: c.href, icon: c.icon || undefined }, effect };
+    lastPress.rec = t;
     if (c.group > 1) { t.group = c.group; t.note = `${c.group} similar, pressed the first`; }
     // One level down: a press that opened a layer — its own controls, each judged like the page's, each pressed once.
     if (effect.kind === 'open') {
@@ -445,14 +578,28 @@ for (const s of screensIn) {
         if (!(await openScreen(s))) { if (NO_RELOAD) lostWay(s); t.inside.pressed.push({ role: x.role, name: x.name, effect: { kind: 'unreachable' } }); continue; }
         lastPress = { name: x.name, icon: x.icon, selector: x.selector };
         const opener = await locate(c);
-        if (opener) { await opener.click({ timeout: 3000 }).catch(() => {}); await settle(); }
+        if (opener) { await press(opener, 3000); await settle(); await late(); }
         const b2 = await page.evaluate(SNAP, LANDMARK);
         const l2 = await locate(x);
         const rec = { role: x.role, name: x.name };
         if (!opener || !l2) { t.inside.pressed.push({ ...rec, effect: { kind: 'unreachable' } }); continue; }
-        try { await l2.click({ timeout: 3000 }); } catch (e) { t.inside.pressed.push({ ...rec, effect: { kind: 'unclickable', why: String(e).slice(0, 80) } }); continue; }
+        { const err = await press(l2, 3000); if (err) { t.inside.pressed.push({ ...rec, effect: { kind: 'unclickable', why: clickFailure(err) } }); continue; } }
         await settle();
-        t.inside.pressed.push({ ...rec, effect: heldEffect() ?? effectOf(b2, await page.evaluate(SNAP, LANDMARK), id, own, origin) });
+        const closed2 = await late();
+        const asked2 = await answerPrompt();
+        const a2 = await page.evaluate(SNAP, LANDMARK);
+        const e2 = heldEffect() ?? effectOf(b2, a2, id, own, origin);
+        if (closed2) e2.closedMessage = closed2;
+        if (asked2) e2.savePrompt = { question: asked2.question, answered: asked2.answer ?? null };
+        const edit2 = e2.kind === 'navigate' ? null : editedBy(b2, a2);
+        if (edit2) {
+          e2.edited = edit2;
+          editedNow.set(`${x.selector}|${x.name}`, 'changed a form field when pressed: pressed once, not again');
+          console.log(`  ${id}: pressing "${x.name || x.icon || ''}" inside "${c.name || c.icon || ''}" changed the form (${edit2.fields.join(', ') || 'marked changed'}) — not pressed again`);
+        }
+        const r2 = { ...rec, effect: e2 };
+        lastPress.rec = r2;
+        t.inside.pressed.push(r2);
       }
       if (safe.length > 12) t.inside.notPressed = safe.length - 12;
     }
@@ -470,6 +617,12 @@ for (const s of screensIn) {
   screens.push({ url, name: s.name, clicks: s.clicks.length ? s.clicks : undefined, landmark: s.shared ? own : undefined, path: new URL(url).pathname + new URL(url).search, pattern: pattern(url), title, controls: all.length, pressed: todo.length, refused, allowed: allowed.length ? allowed : undefined, skipped: skipped.length, transitions, unpressed: unpressed.length ? unpressed.slice(0, 20) : undefined, unpressedCount: unpressed.length, uncapturedTabs: tabs.length ? tabs : undefined });
   const k = (x) => transitions.filter((t) => t.effect.kind === x).length;
   console.log(`  ${String(s.name ?? pattern(url)).padEnd(32)} ${all.length} controls: ${k('navigate')} navigate · ${k('open')} open · ${k('change')} change · ${k('none')} none · ${refused.length} refused${allowed.length ? ` · ${allowed.length} allowed` : ''}${transitions.some((t) => t.control.role === 'row') ? ` · ${transitions.filter((t) => t.control.role === 'row').length} clickable rows pressed` : ''}${unpressed.length ? ` · ${unpressed.length} clickable rows refused, not pressed` : ''}${transitions.some((t) => t.inside) ? ` · ${transitions.reduce((n, t) => n + (t.inside?.pressed.length || 0), 0)} pressed inside opened layers (${transitions.reduce((n, t) => n + (t.inside?.refused.length || 0), 0)} refused)` : ''}`);
+}
+// The map ends on its first screen, so it leaves no form it changed one click from a save: that way back answers the
+// product's question like every other.
+if (NO_RELOAD && lastPress) {
+  ending = true;
+  if (!(await openScreen(screensIn[0]))) console.log(`  warning: the map could not return to ${screensIn[0].name ?? screensIn[0].url} at the end (${openFail?.selector}: ${openFail?.why}) — look at the window before the next capture`);
 }
 await browser.close();
 const blocked = blockedLists ? blockedLists.flat() : null;
@@ -496,7 +649,21 @@ if (tabsOpen.length) {
   console.log(`  tab panels no capture holds (${tabsOpen.length}): ${tabsOpen.slice(0, 12).map((t) => `${t.screen} \u203a ${t.tab}`).join(', ')} — capture each the flow needs, e.g. node scripts/${tabsOpen[0].command}`);
 }
 if (NO_RELOAD) console.log(`  note: the map pressed controls in the designer's window and nothing reset it: the product may keep the last choice (a date range, a tab, a collapsed menu) — look at the window before the next capture, or sign in again (--close, then --keep-open) for a clean one`);
+if (savePrompts.length) { doc.savePrompts = savePrompts; console.log(`  the product asked to save ${savePrompts.length} time(s), answered without saving each time: ${[...new Set(savePrompts.map((p) => p.after && (p.after.name || p.after.icon || p.after.selector)).filter(Boolean))].map((n) => `"${n}"`).join(', ') || 'an earlier run'} changed a form — those controls are listed in flows.json (savePrompt, edited); say in your report that the map changed nothing the product kept`); }
 if (ATTACH) doc.window = { attached: ATTACH, noReload: NO_RELOAD || undefined, home: HOME.length ? HOME : undefined, note: NO_RELOAD ? 'mapped in the window the designer signed in in, with no page load: each screen reached by --home and its own clicks, so state the page holds carries from one press to the next' : 'mapped in the window the designer signed in in: one tab for every load, so state the product keeps in storage (the last tab, the last program) carries from one press to the next load' };
+// A map in which a screen the last one reached is unreachable now (a message over the page, a setting the product
+// remembers, its question to save) is not better than the last: the old file is kept and the new one set beside it.
+if (existsSync(out) && !ACCEPT_LOST) {
+  let prev = [];
+  try { prev = JSON.parse(readFileSync(out, 'utf8')).screens || []; } catch { /* unreadable: replaced */ }
+  const key = (x) => x.name ?? x.url;
+  const lost = screens.filter((x) => x.unreachable && prev.some((p) => key(p) === key(x) && !p.unreachable));
+  if (lost.length) {
+    writeFileSync(join(P.spec, 'flows', 'flows.new.json'), JSON.stringify(doc, null, 1) + '\n');
+    console.error(`kept flows/flows.json: the last map reached ${lost.map((x) => `${key(x)} (now: ${x.why})`).join('; ')}, this one did not. This map is in flows/flows.new.json. Find what stands in the way (a message over the page: --dismiss-late; a choice the product remembers; its question to save) and run again; --accept-unreachable replaces flows.json anyway.`);
+    process.exit(5);
+  }
+}
 writeFileSync(out, JSON.stringify(doc, null, 1) + '\n');
 if (blocked?.length) console.log(`  ${blockedSummary(blocked)}`);
 const sockLine = blockedLists ? socketSummary(...blockedLists) : null;
